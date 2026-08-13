@@ -38,7 +38,7 @@ inputs:
     required: false
     default: ''
   github_token:
-    description: "GITHUB_TOKEN (or a PAT) with pull-requests:write. Pass ${{ secrets.GITHUB_TOKEN }}."
+    description: "A GITHUB_TOKEN (or PAT) with pull-requests write access. Pass the workflow's GITHUB_TOKEN secret."
     required: true
   provider:
     description: "pi provider backend."

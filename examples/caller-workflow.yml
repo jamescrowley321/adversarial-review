@@ -65,17 +65,14 @@ jobs:
     needs: config
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Run the paid, model-backed lenses ONLY for trusted authors, so a stranger
-    # can't burn your API budget or feed the model malicious PR content:
-    #   - not a fork (fork PRs get no secrets anyway),
-    #   - not Dependabot,
-    #   - author is OWNER / MEMBER / COLLABORATOR (pair with repo setting
-    #     "Require approval for all outside collaborators").
-    # Skipped PRs stay non-auto-mergeable: the required Merge Gate never reports.
+    # Don't spend on fork PRs (they get no secret anyway) or Dependabot.
+    # Outside contributors are gated by the repo setting "Require approval for
+    # all outside collaborators" — NOT by author_association, which the
+    # pull_request event reports as CONTRIBUTOR even for org members (it would
+    # wrongly skip their PRs). Skipped PRs stay non-auto-mergeable.
     if: >-
       github.event.pull_request.head.repo.fork == false &&
-      github.actor != 'dependabot[bot]' &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
+      github.actor != 'dependabot[bot]'
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.config.outputs.matrix) }}

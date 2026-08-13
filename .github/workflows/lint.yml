@@ -42,7 +42,16 @@ jobs:
             console.log(`::error::action.yml has no name mapping for: ${unmapped.join(", ")}`);
             process.exit(1);
           }
-          console.log(`Layout OK: ${LENSES.length} lenses, all referenced.`);
+
+          // A `${{ }}` in an input DESCRIPTION is evaluated at action-load time;
+          // referencing `secrets` there makes composite actions fail to load
+          // ("Unrecognized named-value: 'secrets'"). Ban templates in descriptions.
+          const badDesc = action.split("\n").filter((l) => /^\s*description:/.test(l) && /\$\{\{/.test(l));
+          if (badDesc.length) {
+            console.log(`::error::action.yml input description contains a \${{ }} expression (breaks action loading):\n${badDesc.join("\n")}`);
+            process.exit(1);
+          }
+          console.log(`Layout OK: ${LENSES.length} lenses, all referenced; no templated descriptions.`);
 
       - name: Syntax-check the Node runner
         run: node --check scripts/run-local.mjs
