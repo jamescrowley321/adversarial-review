@@ -60,19 +60,37 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include })}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `csv=${keys.join(",")}\n`);
 
-  review:
-    name: ${{ matrix.name }}
-    needs: config
+  # Deterministic gate: the paid lenses (review) `needs:` this, so they never run
+  # unless the cheap checks pass first. The fork/bot gate lives here and cascades.
+  # Don't spend on fork PRs (they get no secret anyway) or Dependabot. Outside
+  # contributors are gated by the repo setting "Require approval for all outside
+  # collaborators" — NOT by author_association (the event reports CONTRIBUTOR for
+  # org members, which would wrongly skip their PRs).
+  preflight:
+    name: Preflight
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # Don't spend on fork PRs (they get no secret anyway) or Dependabot.
-    # Outside contributors are gated by the repo setting "Require approval for
-    # all outside collaborators" — NOT by author_association, which the
-    # pull_request event reports as CONTRIBUTOR even for org members (it would
-    # wrongly skip their PRs). Skipped PRs stay non-auto-mergeable.
+    timeout-minutes: 12
     if: >-
       github.event.pull_request.head.repo.fork == false &&
       github.actor != 'dependabot[bot]'
+    permissions:
+      checks: read
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Wait for deterministic checks
+        uses: jamescrowley321/adversarial-review@v1
+        with:
+          mode: preflight
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # EXACT check-run names that must pass before the lenses run — edit per repo.
+          required_checks: "lint, typecheck, build, secret-scan"
+
+  review:
+    name: ${{ matrix.name }}
+    needs: [config, preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.config.outputs.matrix) }}

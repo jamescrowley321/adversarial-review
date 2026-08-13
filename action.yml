@@ -75,6 +75,18 @@ inputs:
     description: "PR number to review. Defaults to the triggering pull_request."
     required: false
     default: ''
+  required_checks:
+    description: "mode=preflight: comma-separated check-run names that must PASS before the review runs (e.g. lint, typecheck, docker, secret-scan). Preflight waits for them and fails if any fails, so the paid lenses never run on a PR that fails the cheap deterministic gates. List only checks that run on every PR."
+    required: false
+    default: ''
+  preflight_timeout_seconds:
+    description: "mode=preflight: max seconds to wait for required_checks to complete before failing."
+    required: false
+    default: '600'
+  preflight_poll_seconds:
+    description: "mode=preflight: seconds between polls while waiting for required_checks."
+    required: false
+    default: '30'
   compliance_rules_file:
     description: "Path, in the reviewed repo, to extra Compliance-lens rules appended to the persona (used when lens=compliance). Optional; the built-in baseline (AI-provenance disclosure, human accountability, no committed secrets) always applies."
     required: false
@@ -325,3 +337,53 @@ runs:
             return;
           }
           core.info(`All ${EXPECTED.length} lenses completed with no blocking findings. Gate passes.`);
+
+    # ── Preflight (mode=preflight): wait for the cheap deterministic checks to
+    #    PASS before the paid lenses run. No model call. ──
+    - name: Wait for prerequisite checks
+      if: inputs.mode == 'preflight'
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        REQUIRED_CHECKS: ${{ inputs.required_checks }}
+        TIMEOUT_S: ${{ inputs.preflight_timeout_seconds }}
+        POLL_S: ${{ inputs.preflight_poll_seconds }}
+      with:
+        script: |
+          const required = (process.env.REQUIRED_CHECKS || "").split(",").map((s) => s.trim()).filter(Boolean);
+          if (!required.length) { core.info("No required_checks configured — preflight passes."); return; }
+
+          const headSha = context.payload.pull_request.head.sha;
+          const timeoutMs = Number(process.env.TIMEOUT_S || "1500") * 1000;
+          const pollMs = Number(process.env.POLL_S || "30") * 1000;
+          const start = Date.now();
+          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+          const FAIL = ["failure", "cancelled", "timed_out", "action_required", "stale"];
+
+          while (true) {
+            const runs = await github.paginate(github.rest.checks.listForRef, {
+              owner: context.repo.owner, repo: context.repo.repo, ref: headSha, per_page: 100,
+            });
+            const stateOf = (name) => {
+              const m = runs.filter((r) => r.name === name);
+              if (!m.length) return "missing";
+              const latest = m.sort((a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0))[0];
+              return latest.status === "completed" ? (latest.conclusion || "unknown") : "pending";
+            };
+            const state = Object.fromEntries(required.map((n) => [n, stateOf(n)]));
+            const failed = required.filter((n) => FAIL.includes(state[n]));
+            if (failed.length) {
+              core.setFailed(`Prerequisite check(s) failed — skipping the agentic review: ${failed.map((n) => `${n}=${state[n]}`).join(", ")}`);
+              return;
+            }
+            const waiting = required.filter((n) => state[n] === "missing" || state[n] === "pending");
+            if (!waiting.length) {
+              core.info(`All prerequisite checks passed: ${required.join(", ")}.`);
+              return;
+            }
+            if (Date.now() - start > timeoutMs) {
+              core.setFailed(`Timed out after ${Math.round(timeoutMs / 1000)}s waiting for: ${waiting.join(", ")} (are these exact check names that run on every PR?)`);
+              return;
+            }
+            core.info(`Waiting on: ${waiting.join(", ")} — elapsed ${Math.round((Date.now() - start) / 1000)}s`);
+            await sleep(pollMs);
+          }

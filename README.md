@@ -81,6 +81,30 @@ them. Run only `blind,edge-case,acceptance` for correctness; add `sentinel` /
 `viper` for security; add `compliance` for policy; add the OWASP lenses for OWASP
 coverage. Every enabled lens runs as its own parallel job.
 
+### Gate the lenses behind your cheap checks
+
+Don't pay for an AI review of a PR that fails lint. Add a `preflight` job that
+`mode: preflight` uses to **wait for your deterministic checks to pass**, and
+have the review matrix `needs:` it — so the paid lenses never start unless the
+cheap gates are green (see the example caller):
+
+```yaml
+preflight:
+  steps:
+    - uses: jamescrowley321/adversarial-review@v1
+      with:
+        mode: preflight
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        required_checks: "lint, typecheck, build, secret-scan"   # EXACT check-run names
+review:
+  needs: [config, preflight]   # only runs if preflight passed
+```
+
+`required_checks` are the exact check-run names (list only checks that run on
+every PR). Preflight polls until they complete, **fails** if any fails (so the
+lenses are skipped), and gives up after `preflight_timeout_seconds` (default
+600). The preflight job needs `permissions: { checks: read }`.
+
 ## Compliance & AI-provenance policy
 
 The **Compliance** lens is a review agent for governance rather than defects. It
