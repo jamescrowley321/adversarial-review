@@ -24,7 +24,8 @@ jobs:
     timeout-minutes: 15
     if: >-
       github.event.pull_request.head.repo.fork == false &&
-      github.actor != 'dependabot[bot]'
+      github.actor != 'dependabot[bot]' &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
     strategy:
       fail-fast: false
       matrix:

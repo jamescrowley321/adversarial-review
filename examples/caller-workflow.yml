@@ -27,12 +27,19 @@ jobs:
     name: ${{ matrix.lens-name }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Skip fork PRs (no access to secrets) and Dependabot bumps (don't burn
-    # tokens on lockfile churn). Both stay non-auto-mergeable: with no review,
-    # the required Merge Gate check never reports, so a maintainer handles them.
+    # Run the (paid, model-backed) lenses ONLY for trusted authors, so a stranger
+    # can't burn your API budget or feed the model malicious PR content:
+    #   - not a fork (fork PRs get no secrets anyway),
+    #   - not Dependabot (don't spend tokens on lockfile churn),
+    #   - author is OWNER / MEMBER / COLLABORATOR (skips outside + first-time
+    #     contributors — pair with repo setting "Require approval for all outside
+    #     collaborators" so their runs need a maintainer click).
+    # Skipped PRs stay non-auto-mergeable: the required Merge Gate never reports,
+    # so a maintainer handles them deliberately.
     if: >-
       github.event.pull_request.head.repo.fork == false &&
-      github.actor != 'dependabot[bot]'
+      github.actor != 'dependabot[bot]' &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
     strategy:
       fail-fast: false
       matrix:
