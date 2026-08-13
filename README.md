@@ -104,4 +104,4 @@ action packages the hardened CI form of it. See [ATTRIBUTION.md](ATTRIBUTION.md)
 
 ## License
 
-MIT © James Crowley. See [LICENSE](LICENSE).
+Apache-2.0 © 2026 James Crowley. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

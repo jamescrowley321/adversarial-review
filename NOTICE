@@ -1,0 +1,11 @@
+Adversarial Review
+Copyright 2026 James Crowley
+
+This product includes software developed by James Crowley.
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+The review personas and the fresh-/blind-context review method derive from the
+author's open-source review framework. See ATTRIBUTION.md. The CI engine is the
+pi coding agent (https://pi.dev) via shaftoe/pi-coding-agent-action, used under
+its own license.
