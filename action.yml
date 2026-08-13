@@ -104,6 +104,8 @@ runs:
           sentinel: "Sentinel",
           viper: "Viper",
           compliance: "Compliance",
+          "owasp-web": "OWASP Web Top 10",
+          "owasp-llm": "OWASP LLM Top 10",
         };
 
         const pr = (process.env.IN_PR || "").trim() || (process.env.EVENT_PR || "").trim();

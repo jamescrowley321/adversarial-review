@@ -92,20 +92,19 @@ The security lenses already cover much of the **OWASP Web Top 10 (2021)** —
 Sentinel and Viper hit injection, broken access control, SSRF, crypto misuse.
 The plan makes that explicit and adds LLM coverage:
 
-- **Phase 1 — Annotate Sentinel** with OWASP Web Top 10 (2021) category IDs
-  (A01–A10) so findings cite the canonical class. Low effort, in-persona.
-- **Phase 2 — Add an opt-in `llm-top-10` lens** for repos that *build* LLM/agent
-  features, covering the GenAI/LLM Top 10 2026: LLM01 Prompt Injection, LLM02
-  Sensitive Information Disclosure, LLM03 Excessive Agency, LLM04 Supply Chain,
-  LLM05 Data & Model Poisoning, LLM06 Unbounded Consumption, LLM07
-  Misinformation, LLM08 Hidden Context Exposure, LLM09 Vector & Embedding
-  Weaknesses, LLM10 Improper Output Handling. Pair with the OWASP **Agentic
-  (ASI) Top 10** when the code lets a model act with tools/memory.
-- **Phase 3 — Ship OWASP rule packs** as `compliance_rules_file` presets, so any
-  repo can enforce an OWASP checklist through the Compliance lens without
-  changing the action.
-- **Reflexive check:** run the `llm-top-10` lens on *this* repo — LLM01 and LLM06
-  are exactly the controls above, and this document is the residual-risk record.
+- ✅ **Phase 1 — `owasp-web` lens** (opt-in): the OWASP Web Top 10 (2021), each
+  finding tagged with its `A0x` category. Runs as its own parallel job.
+- ✅ **Phase 2 — `owasp-llm` lens** (opt-in): the GenAI/LLM Top 10 2026
+  (LLM01–LLM10), tagged `LLM0x`, activating only when the diff touches AI/LLM
+  surface. Notes when the OWASP **Agentic (ASI) Top 10** also applies.
+- 🔭 **Phase 3 — OWASP rule packs** as `compliance_rules_file` presets, so a repo
+  can also enforce an OWASP checklist through the Compliance lens.
+- ✅ **Reflexive check:** the self-review workflow runs `owasp-llm` on *this* repo
+  — LLM01 and LLM06 are exactly the controls above, and this document is the
+  residual-risk record.
+
+Both OWASP lenses are off by default; enable them via the `ENABLED` toggle list
+in the caller (they run in parallel with the rest).
 
 ### References
 

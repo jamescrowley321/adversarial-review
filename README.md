@@ -12,7 +12,8 @@ way an attacker or a new maintainer would.
 
 ## The lenses
 
-Five adversarial defect-hunters, plus an optional Compliance lens:
+Five adversarial defect-hunters, plus optional Compliance and OWASP lenses — all
+run in parallel:
 
 | Lens | Looks for | Blocks merge on |
 |------|-----------|-----------------|
@@ -22,6 +23,8 @@ Five adversarial defect-hunters, plus an optional Compliance lens:
 | **Sentinel** | Exploitable vulnerabilities (OWASP-aligned), concrete attack scenario required | Confirmed/likely exploits |
 | **Viper** | Red-team attack paths — only active when auth/crypto/middleware/infra changes | Critical/high exploit chains |
 | **Compliance** *(opt-in)* | Policy: AI-provenance disclosure, human accountability, no secrets — plus your own rules | Undisclosed AI PRs, policy violations |
+| **OWASP Web Top 10** *(opt-in)* | The 2021 web risks (A01–A10), each finding tagged with its category | Exploitable A0x issues |
+| **OWASP LLM Top 10** *(opt-in)* | The GenAI/LLM 2026 risks (LLM01–LLM10); activates only on AI/LLM code | Exploitable LLM0x issues |
 
 Findings use one severity vocabulary: **MUST FIX** (blocks), **SHOULD FIX**,
 **NITPICK**. Any MUST FIX makes that lens request changes, which fails the gate.
@@ -56,7 +59,7 @@ merge is blocked until the MUST FIX findings are resolved.
 | Input | Default | Notes |
 |-------|---------|-------|
 | `mode` | — (required) | `lens` or `gate` |
-| `lens` | — | Required for `mode: lens`: `blind` \| `edge-case` \| `acceptance` \| `sentinel` \| `viper` \| `compliance` |
+| `lens` | — | Required for `mode: lens`: `blind` \| `edge-case` \| `acceptance` \| `sentinel` \| `viper` \| `compliance` \| `owasp-web` \| `owasp-llm` |
 | `lenses` | `blind,edge-case,acceptance,sentinel,viper` | Gate's expected set — must match the caller matrix |
 | `github_token` | — (required) | `${{ secrets.GITHUB_TOKEN }}`; needs `pull-requests: write` |
 | `api_key` | — | Provider key (required for `mode: lens`) |
@@ -69,11 +72,14 @@ merge is blocked until the MUST FIX findings are resolved.
 | `pr_number` | triggering PR | Override for manual runs |
 | `compliance_rules_file` | `.github/adversarial-review/compliance.md` | Extra Compliance-lens rules (used when `lens: compliance`) |
 
-### Running fewer (or more) lenses
+### Toggling lenses
 
-Set the matrix in the caller **and** the gate's `lenses` input to match. To run
-only the correctness lenses, keep `blind,edge-case,acceptance`; add `sentinel`
-and `viper` for security-sensitive repos; add `compliance` to enforce policy.
+The example caller has a single `ENABLED` list (in its `config` job) that drives
+**both** the parallel review matrix **and** the gate — one source of truth.
+Comment a line to disable a lens; uncomment `owasp-web` / `owasp-llm` to enable
+them. Run only `blind,edge-case,acceptance` for correctness; add `sentinel` /
+`viper` for security; add `compliance` for policy; add the OWASP lenses for OWASP
+coverage. Every enabled lens runs as its own parallel job.
 
 ## Compliance & AI-provenance policy
 
