@@ -36,7 +36,7 @@ jobs:
           - { lens: viper,      lens-name: Viper }
           - { lens: compliance, lens-name: Compliance }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: ${{ matrix.lens-name }}
         uses: ./
         with:
@@ -55,7 +55,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Adjudicate lenses
         uses: ./
         with:

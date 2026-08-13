@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Keep the GitHub Actions this action depends on current (clears Node-version
+  # deprecations automatically). Grouped so it's one PR, not one per action.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns: ["*"]

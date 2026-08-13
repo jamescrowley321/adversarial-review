@@ -1,0 +1,43 @@
+# SemVer major-tag maintenance.
+#
+# Consumers pin `@v1`. When you publish a `vX.Y.Z` release, this moves the `vX`
+# major tag to that release's commit, so `@v1` always tracks the latest v1.x.x.
+
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  major-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Advance the major tag
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const tag = context.payload.release.tag_name;
+            const m = tag.match(/^v(\d+)\.\d+\.\d+/);
+            if (!m) {
+              core.info(`Release tag "${tag}" is not vMAJOR.MINOR.PATCH — nothing to do.`);
+              return;
+            }
+            const major = `v${m[1]}`;
+            const { data: commit } = await github.rest.repos.getCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: tag,
+            });
+            const sha = commit.sha;
+            const ref = `tags/${major}`;
+            try {
+              await github.rest.git.updateRef({ owner: context.repo.owner, repo: context.repo.repo, ref, sha, force: true });
+              core.info(`Moved ${major} -> ${sha.slice(0, 12)}`);
+            } catch {
+              await github.rest.git.createRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `refs/${ref}`, sha });
+              core.info(`Created ${major} -> ${sha.slice(0, 12)}`);
+            }

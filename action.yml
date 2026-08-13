@@ -118,7 +118,7 @@ runs:
     # ── Consumer checkout (mode=lens): reviewers read surrounding code to confirm findings. ──
     - name: Checkout PR head
       if: inputs.mode == 'lens'
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
@@ -176,7 +176,7 @@ runs:
     - name: Check lens review landed
       id: check
       if: always() && inputs.mode == 'lens'
-      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         LENS_NAME: ${{ steps.ctx.outputs.lens_name }}
         PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
@@ -219,7 +219,7 @@ runs:
     # ── Fail THIS lens job (attributably) if no well-formed review exists after the retry. ──
     - name: Fail if lens produced no review
       if: always() && inputs.mode == 'lens' && steps.check.outputs.result != 'true'
-      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         LENS_NAME: ${{ steps.ctx.outputs.lens_name }}
         PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
@@ -247,7 +247,7 @@ runs:
 
     - name: Upload review session
       if: always() && inputs.mode == 'lens' && steps.pi.outputs.session_html_path
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: pi-review-session-${{ inputs.lens }}
         path: ${{ steps.pi.outputs.session_html_path }}
@@ -256,7 +256,7 @@ runs:
     # ── Merge gate (mode=gate): adjudicate the lenses on the head commit, fail closed. ──
     - name: Aggregate lens results
       if: inputs.mode == 'gate'
-      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         EXPECTED: ${{ steps.ctx.outputs.expected }}
         PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}

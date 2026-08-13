@@ -15,7 +15,8 @@ another path) to enforce your own policy.
   Commits (`feat:`, `fix:`, `docs:`, `chore:`, `ci:`, …). Non-conforming → SHOULD FIX.
 - **Persona output envelope.** Any change to a file under `lenses/` must preserve
   the strict `## <Lens Name>` output contract the merge gate parses. Breaking it → MUST FIX.
-- **Pin third-party actions.** New third-party GitHub Actions referenced in
-  `action.yml` or workflows must be pinned to a commit SHA (not a floating tag),
-  for OpenSSF Scorecard. Unpinned → MUST FIX.
+- **Pin third-party actions.** New third-party (non-`actions/`) GitHub Actions
+  referenced in `action.yml` or workflows must be pinned to a commit SHA (not a
+  floating tag), for OpenSSF Scorecard. First-party `actions/*` may use a major
+  version tag. Unpinned third-party → MUST FIX.
 - **No new runtime dependencies** without a justification in the PR description → SHOULD FIX.
