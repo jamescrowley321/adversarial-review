@@ -1,0 +1,41 @@
+# Static checks for the action itself: shellcheck the scripts and the embedded
+# composite steps, and validate every workflow/action YAML with actionlint.
+
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ShellCheck scripts
+        run: shellcheck -x scripts/*.sh
+
+      - name: Validate YAML parses
+        run: |
+          python3 - <<'PY'
+          import glob, sys, yaml
+          bad = 0
+          for f in ["action.yml", *glob.glob(".github/workflows/*.yml"), "examples/caller-workflow.yml"]:
+              try:
+                  yaml.safe_load(open(f))
+                  print(f"ok   {f}")
+              except Exception as e:
+                  print(f"FAIL {f}: {e}"); bad += 1
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: actionlint
+        uses: raven-actions/actionlint@v2
+        with:
+          files: 'action.yml examples/caller-workflow.yml'

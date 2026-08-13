@@ -1,0 +1,9 @@
+# Local-mode output
+.adversarial-review/
+review-diff.patch
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

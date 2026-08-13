@@ -1,0 +1,73 @@
+# Adversarial Review — consumer workflow.
+#
+# Copy this to `.github/workflows/adversarial-review.yml` in a repo you want
+# reviewed. Add repo secret OPENROUTER_API_KEY, then require the "Merge Gate"
+# check in your branch protection for `main`.
+#
+# Pin the action to a released tag (or a commit SHA for OpenSSF Scorecard).
+
+name: Adversarial Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+concurrency:
+  group: adversarial-review-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  review:
+    name: ${{ matrix.lens-name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Skip fork PRs (no access to secrets) and Dependabot bumps (don't burn
+    # tokens on lockfile churn). Both stay non-auto-mergeable: with no review,
+    # the required Merge Gate check never reports, so a maintainer handles them.
+    if: >-
+      github.event.pull_request.head.repo.fork == false &&
+      github.actor != 'dependabot[bot]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { lens: blind,      lens-name: Blind Hunter }
+          - { lens: edge-case,  lens-name: Edge Case Hunter }
+          - { lens: acceptance, lens-name: Acceptance Auditor }
+          - { lens: sentinel,   lens-name: Sentinel }
+          - { lens: viper,      lens-name: Viper }
+    steps:
+      - name: ${{ matrix.lens-name }}
+        uses: jamescrowley321/adversarial-review@v1
+        with:
+          mode: lens
+          lens: ${{ matrix.lens }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          # Optional overrides:
+          # provider: openrouter
+          # model: z-ai/glm-5.2
+          # thinking_level: medium
+
+  gate:
+    name: Merge Gate
+    runs-on: ubuntu-latest
+    needs: [review]
+    if: always() && needs.review.result != 'skipped'
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Adjudicate lenses
+        uses: jamescrowley321/adversarial-review@v1
+        with:
+          mode: gate
+          lenses: blind,edge-case,acceptance,sentinel,viper
+          github_token: ${{ secrets.GITHUB_TOKEN }}

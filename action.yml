@@ -1,0 +1,304 @@
+# Adversarial Review — a fresh-context, diff-only AI review gate.
+#
+# One composite action, two modes:
+#   mode: lens  — run ONE adversarial persona as a fresh agent session, verify it
+#                 posted a well-formed "## <Lens>" PR review, retry once on a
+#                 flaky/empty result, then fail loudly and attributably.
+#   mode: gate  — aggregate the lens reviews on the head commit and fail closed
+#                 (blocking merge) if any lens requested changes or is missing.
+#
+# The caller runs `mode: lens` as a matrix (one job per lens, in parallel) and a
+# final `mode: gate` job that `needs:` them. See examples/caller-workflow.yml.
+#
+# Engine: the pi coding agent (pi.dev) via shaftoe/pi-coding-agent-action,
+# routed through OpenRouter (default model z-ai/glm-5.2). All overridable.
+
+name: 'Adversarial Review'
+description: 'Fresh-context, diff-only adversarial PR review — five skeptical AI lenses that fail the merge on real defects.'
+author: 'James Crowley'
+
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  mode:
+    description: "'lens' to run a single review persona, or 'gate' to aggregate and adjudicate."
+    required: true
+  lens:
+    description: "Which persona to run when mode=lens: blind | edge-case | acceptance | sentinel | viper."
+    required: false
+    default: ''
+  lenses:
+    description: "Comma-separated lens keys the gate should expect (mode=gate). Must match the caller matrix."
+    required: false
+    default: 'blind,edge-case,acceptance,sentinel,viper'
+  api_key:
+    description: "Provider API key (e.g. OpenRouter). Required for mode=lens. Pass from a secret."
+    required: false
+    default: ''
+  github_token:
+    description: "GITHUB_TOKEN (or a PAT) with pull-requests:write. Pass ${{ secrets.GITHUB_TOKEN }}."
+    required: true
+  provider:
+    description: "pi provider backend."
+    required: false
+    default: 'openrouter'
+  model:
+    description: "Model id for the provider."
+    required: false
+    default: 'z-ai/glm-5.2'
+  thinking_level:
+    description: "pi thinking level: low | medium | high."
+    required: false
+    default: 'medium'
+  diff_max_lines:
+    description: "Max diff lines fed to the reviewer."
+    required: false
+    default: '2000'
+  diff_max_bytes:
+    description: "Max diff bytes fed to the reviewer."
+    required: false
+    default: '204800'
+  diff_ignore_patterns:
+    description: "Space-separated globs to exclude from the diff (lockfiles, build output, vendored code)."
+    required: false
+    default: 'dist/ build/ node_modules/ pnpm-lock.yaml package-lock.json yarn.lock uv.lock poetry.lock go.sum Cargo.lock'
+  pr_number:
+    description: "PR number to review. Defaults to the triggering pull_request."
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    # ── Shared context: resolve the effective PR number and lens display names. ──
+    - id: ctx
+      shell: bash
+      env:
+        IN_MODE: ${{ inputs.mode }}
+        IN_LENS: ${{ inputs.lens }}
+        IN_LENSES: ${{ inputs.lenses }}
+        IN_PR: ${{ inputs.pr_number }}
+        EVENT_PR: ${{ github.event.pull_request.number }}
+      run: |
+        set -euo pipefail
+        PR="${IN_PR:-}"
+        [ -z "$PR" ] && PR="${EVENT_PR:-}"
+        if [ -z "$PR" ]; then echo "::error::No PR number (not a pull_request event and pr_number unset)"; exit 1; fi
+        echo "pr_number=$PR" >> "$GITHUB_OUTPUT"
+
+        name_of() {
+          case "$1" in
+            blind)      echo "Blind Hunter";;
+            edge-case)  echo "Edge Case Hunter";;
+            acceptance) echo "Acceptance Auditor";;
+            sentinel)   echo "Sentinel";;
+            viper)      echo "Viper";;
+            *)          echo "";;
+          esac
+        }
+
+        if [ "$IN_MODE" = "lens" ]; then
+          LN="$(name_of "$IN_LENS")"
+          if [ -z "$LN" ]; then echo "::error::Unknown lens '$IN_LENS' (expected blind|edge-case|acceptance|sentinel|viper)"; exit 1; fi
+          echo "lens_name=$LN" >> "$GITHUB_OUTPUT"
+        fi
+
+        # Gate: build a pipe-separated list of expected display names from the keys.
+        EXP=""
+        IFS=',' read -ra KS <<< "$IN_LENSES"
+        for k in "${KS[@]}"; do
+          k="$(echo "$k" | tr -d '[:space:]')"
+          [ -z "$k" ] && continue
+          n="$(name_of "$k")"
+          if [ -z "$n" ]; then echo "::error::Unknown lens key '$k' in lenses input"; exit 1; fi
+          EXP="${EXP:+$EXP|}$n"
+        done
+        echo "expected=$EXP" >> "$GITHUB_OUTPUT"
+
+    # ── Consumer checkout (mode=lens): reviewers read surrounding code to confirm findings. ──
+    - name: Checkout PR head
+      if: inputs.mode == 'lens'
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+
+    # ── Compose the lens prompt: persona + shared output contract, PR number substituted. ──
+    - name: Compose lens prompt
+      if: inputs.mode == 'lens'
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        LENS_KEY: ${{ inputs.lens }}
+        PR: ${{ steps.ctx.outputs.pr_number }}
+      run: |
+        set -euo pipefail
+        LENS_FILE="$ACTION_PATH/lenses/${LENS_KEY}.md"
+        SHARED="$ACTION_PATH/lenses/shared-instructions.md"
+        [ -f "$LENS_FILE" ] || { echo "::error::Missing persona file $LENS_FILE"; exit 1; }
+        [ -f "$SHARED" ] || { echo "::error::Missing shared-instructions.md"; exit 1; }
+        DELIM="PROMPT_EOF_$(printf '%s' "$LENS_KEY$PR" | cksum | tr -d ' ')"
+        {
+          echo "COMPOSED_PROMPT<<$DELIM"
+          sed "s/__PR_NUMBER__/$PR/g" "$LENS_FILE"
+          echo
+          cat "$SHARED"
+          echo "$DELIM"
+        } >> "$GITHUB_ENV"
+
+    - name: Run adversarial lens
+      id: pi
+      if: inputs.mode == 'lens'
+      uses: shaftoe/pi-coding-agent-action@0698813906fb1f23425bd742510e3080d624840d # v2.27.0
+      with:
+        github_token: ${{ inputs.github_token }}
+        provider: ${{ inputs.provider }}
+        model: ${{ inputs.model }}
+        token: ${{ inputs.api_key }}
+        thinking_level: ${{ inputs.thinking_level }}
+        diff_max_lines: ${{ inputs.diff_max_lines }}
+        diff_max_bytes: ${{ inputs.diff_max_bytes }}
+        diff_ignore_patterns: ${{ inputs.diff_ignore_patterns }}
+        export_session_html: true
+        prompt: ${{ env.COMPOSED_PROMPT }}
+
+    # ── Did this lens actually post a well-formed "## <Lens>" review on the head SHA? ──
+    - name: Check lens review landed
+      id: check
+      if: always() && inputs.mode == 'lens'
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.0.1
+      env:
+        LENS_NAME: ${{ steps.ctx.outputs.lens_name }}
+        PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
+      with:
+        result-encoding: string
+        script: |
+          const headSha = context.payload.pull_request.head.sha;
+          const header = `## ${process.env.LENS_NAME}`;
+          const reviews = await github.paginate(github.rest.pulls.listReviews, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: Number(process.env.PR_NUMBER),
+            per_page: 100,
+          });
+          const isBot = (r) =>
+            r.user && (r.user.login === "github-actions[bot]" || r.user.login === "github-actions");
+          const ok = reviews.some(
+            (r) => r.commit_id === headSha && isBot(r) && (r.body || "").trim().startsWith(header),
+          );
+          core.info(`"${header}" well-formed review on ${headSha.slice(0, 12)}: ${ok}`);
+          return ok ? "true" : "false";
+
+    # ── Retry ONCE on a flaky/empty first attempt. Same composed prompt, so it can't drift. ──
+    - name: Retry adversarial lens
+      id: pi_retry
+      if: always() && inputs.mode == 'lens' && steps.check.outputs.result != 'true'
+      uses: shaftoe/pi-coding-agent-action@0698813906fb1f23425bd742510e3080d624840d # v2.27.0
+      with:
+        github_token: ${{ inputs.github_token }}
+        provider: ${{ inputs.provider }}
+        model: ${{ inputs.model }}
+        token: ${{ inputs.api_key }}
+        thinking_level: ${{ inputs.thinking_level }}
+        diff_max_lines: ${{ inputs.diff_max_lines }}
+        diff_max_bytes: ${{ inputs.diff_max_bytes }}
+        diff_ignore_patterns: ${{ inputs.diff_ignore_patterns }}
+        export_session_html: true
+        prompt: ${{ env.COMPOSED_PROMPT }}
+
+    # ── Fail THIS lens job (attributably) if no well-formed review exists after the retry. ──
+    - name: Fail if lens produced no review
+      if: always() && inputs.mode == 'lens' && steps.check.outputs.result != 'true'
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.0.1
+      env:
+        LENS_NAME: ${{ steps.ctx.outputs.lens_name }}
+        PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
+      with:
+        script: |
+          const headSha = context.payload.pull_request.head.sha;
+          const header = `## ${process.env.LENS_NAME}`;
+          const reviews = await github.paginate(github.rest.pulls.listReviews, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: Number(process.env.PR_NUMBER),
+            per_page: 100,
+          });
+          const isBot = (r) =>
+            r.user && (r.user.login === "github-actions[bot]" || r.user.login === "github-actions");
+          const ok = reviews.some(
+            (r) => r.commit_id === headSha && isBot(r) && (r.body || "").trim().startsWith(header),
+          );
+          if (!ok) {
+            core.setFailed(
+              `Lens "${process.env.LENS_NAME}" posted no well-formed review after one retry ` +
+              `(flaky/empty model output). Re-run this job to retry.`,
+            );
+          }
+
+    - name: Upload review session
+      if: always() && inputs.mode == 'lens' && steps.pi.outputs.session_html_path
+      uses: actions/upload-artifact@v4
+      with:
+        name: pi-review-session-${{ inputs.lens }}
+        path: ${{ steps.pi.outputs.session_html_path }}
+        retention-days: 30
+
+    # ── Merge gate (mode=gate): adjudicate the lenses on the head commit, fail closed. ──
+    - name: Aggregate lens results
+      if: inputs.mode == 'gate'
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.0.1
+      env:
+        EXPECTED: ${{ steps.ctx.outputs.expected }}
+        PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
+      with:
+        script: |
+          const prNumber = Number(process.env.PR_NUMBER);
+          const headSha = context.payload.pull_request.head.sha;
+          const EXPECTED = process.env.EXPECTED.split("|").filter(Boolean);
+
+          const reviews = await github.paginate(github.rest.pulls.listReviews, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: prNumber,
+            per_page: 100,
+          });
+
+          const isBot = (r) =>
+            r.user && (r.user.login === "github-actions[bot]" || r.user.login === "github-actions");
+          // Match by "## <Lens>" header prefix; an empty/"null" body matches nothing.
+          const lensOf = (r) => {
+            const first = (r.body || "").trim().split("\n")[0].trim();
+            return EXPECTED.find((l) => first.startsWith(`## ${l}`)) || null;
+          };
+          const onHead = reviews.filter((r) => r.commit_id === headSha && isBot(r) && EXPECTED.includes(lensOf(r)));
+
+          // Keep only the LATEST review per lens, so a stale CHANGES_REQUESTED (or an
+          // earlier empty body) from a prior attempt on the same SHA can't block a re-run.
+          const latestByLens = new Map();
+          for (const r of onHead) {
+            const lens = lensOf(r);
+            const prev = latestByLens.get(lens);
+            if (!prev || new Date(r.submitted_at) > new Date(prev.submitted_at)) latestByLens.set(lens, r);
+          }
+          const missing = EXPECTED.filter((l) => !latestByLens.has(l));
+          const blocked = [...latestByLens.values()].filter((r) => r.state === "CHANGES_REQUESTED");
+
+          core.info(`Lenses on ${headSha.slice(0, 12)}: ${latestByLens.size} / ${EXPECTED.length} (requesting changes: ${blocked.length})`);
+          for (const [lens, r] of latestByLens) core.info(`  ${r.state.padEnd(18)} ## ${lens}`);
+          if (missing.length) core.info(`  MISSING: ${missing.join(", ")}`);
+
+          if (missing.length > 0) {
+            core.setFailed(
+              `Missing well-formed review from: ${missing.join(", ")}. ` +
+              `These lenses returned empty/malformed output — re-run their jobs to retry.`,
+            );
+            return;
+          }
+          if (blocked.length > 0) {
+            const names = blocked.map((r) => (r.body || "").trim().split("\n")[0].replace(/^##\s*/, "")).join(", ");
+            core.setFailed(`${blocked.length} lens(es) requested changes (${names}) — resolve MUST FIX findings before merge`);
+            return;
+          }
+          core.info(`All ${EXPECTED.length} lenses completed with no blocking findings. Gate passes.`);
