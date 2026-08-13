@@ -64,6 +64,13 @@ inputs:
     description: "Space-separated globs to exclude from the diff (lockfiles, build output, vendored code)."
     required: false
     default: 'dist/ build/ node_modules/ pnpm-lock.yaml package-lock.json yarn.lock uv.lock poetry.lock go.sum Cargo.lock'
+  loaded_tools:
+    description: "Newline-separated allowlist of pi tools the lens agent may use. Default is READ + REVIEW ONLY (fetch diff, fetch thread, post one review) — no shell, file-write, push, or create/update-PR — so a successful prompt injection can't exfiltrate the provider key or mutate the repo. Broaden at your own risk (OWASP LLM01)."
+    required: false
+    default: |
+      get_pr_diff
+      get_issue_or_pr_thread
+      create_pull_request_review
   pr_number:
     description: "PR number to review. Defaults to the triggering pull_request."
     required: false
@@ -169,6 +176,7 @@ runs:
         diff_max_lines: ${{ inputs.diff_max_lines }}
         diff_max_bytes: ${{ inputs.diff_max_bytes }}
         diff_ignore_patterns: ${{ inputs.diff_ignore_patterns }}
+        loaded_tools: ${{ inputs.loaded_tools }}
         export_session_html: true
         prompt: ${{ env.COMPOSED_PROMPT }}
 
@@ -213,6 +221,7 @@ runs:
         diff_max_lines: ${{ inputs.diff_max_lines }}
         diff_max_bytes: ${{ inputs.diff_max_bytes }}
         diff_ignore_patterns: ${{ inputs.diff_ignore_patterns }}
+        loaded_tools: ${{ inputs.loaded_tools }}
         export_session_html: true
         prompt: ${{ env.COMPOSED_PROMPT }}
 

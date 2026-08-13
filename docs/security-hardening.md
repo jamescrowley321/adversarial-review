@@ -31,7 +31,7 @@ Defense-in-depth; assume the instruction boundary *will* be bypassed.
 | C1 | **No secrets to untrusted PRs.** Triggered by `pull_request` (never `pull_request_target`); fork PRs get a read-only token and **no `OPENROUTER_API_KEY`**, so lenses can't run on them. This is the load-bearing control. | ✅ shipped | mitigation #4 |
 | C2 | **Only trusted authors trigger the model.** `author_association ∈ {OWNER,MEMBER,COLLABORATOR}` gate on the lens jobs, plus the repo setting *Settings → Actions → "Require approval for all outside collaborators"*. | ✅ workflow gate shipped · ⚙️ repo setting = manual | limits delivery surface |
 | C3 | **Least-privilege token.** Jobs request only `contents: read` + `pull-requests: write`; no other secrets in the job env. | ✅ shipped | mitigation #4, Rule of Two (#8) |
-| C4 | **Constrain the agent's tools** to read + post-one-review; no shell, file-write, or arbitrary-network tools. | ⚠️ **verify** what `shaftoe/pi-coding-agent-action` exposes; pin/limit it | mitigation #1/#4 |
+| C4 | **Constrain the agent's tools.** `loaded_tools` allowlist pins the lens agent to exactly `get_pr_diff`, `get_issue_or_pr_thread`, `create_pull_request_review` — no shell, file-write, push, or create/update-PR tools (pi defaults to `loaded_tools: all`, which includes those). A landed injection therefore can't read the provider key from env or mutate the repo. | ✅ shipped (`loaded_tools` input) | mitigation #1/#4 |
 | C5 | **Deterministic gate.** The merge decision is computed in `github-script` from each review's **state** (`CHANGES_REQUESTED`), not from trusting model text — an injection can't make the gate pass by writing "gate: pass". | ✅ shipped | mitigation #2, LLM10 |
 | C6 | **Hardened trust boundary in the prompt** — treat all content as data; embedded instructions are a MUST FIX finding; ignore invisible/zero-width Unicode and encoded payloads; the only permitted action is posting one review. | ✅ shipped (`lenses/shared-instructions.md`) | mitigation #1/#5/#6 |
 | C7 | **Strip invisible / zero-width / tag-block Unicode** from the diff before the model sees it (defense against ASCII-smuggling). | 🔭 planned enhancement | mitigation #5 |
@@ -41,6 +41,29 @@ Defense-in-depth; assume the instruction boundary *will* be bypassed.
 (a false negative). This is mitigated, not eliminated, by running several
 independent lenses and by treating all AI output as **advisory until a human
 attests** — never as sign-off. LLM01 is intrinsic to current models.
+
+### What if the code under review *contains* prompt-injection payloads?
+
+This is the normal case, not the exception — the diff **is** untrusted input
+(indirect prompt injection, LLM01). Three outcomes, by design:
+
+1. **Intended:** the lens treats the payload as data, does not obey it, and — for
+   the security lenses — *reports it as a finding* ("this input reaches the model
+   / renders unsanitized; it's an injection vector"). A repo that ships prompt
+   handling should *want* that flagged.
+2. **If a payload still steers a lens** (LLM01 is intrinsic; the boundary can be
+   bypassed): the blast radius is bounded by the three-tool allowlist (C4) — no
+   shell, no file/env read, no push — so it cannot exfiltrate the provider key or
+   change the repo. The worst it can do is make **that one lens** under-report or
+   post the wrong event; the deterministic gate (C5) and the other independent
+   lenses still stand, and all output is advisory until a human attests.
+3. **Benign injection-looking content** (this repo's own persona files, security
+   test fixtures, docs about prompt injection) can trip false positives. That is
+   accepted noise for a security tool; tune it per-repo via the Compliance lens
+   rules or by scoping paths.
+
+The scenario an attacker cannot reach at all: a **stranger's** malicious PR never
+reaches the paid model (no secret on forks + the trusted-author gate, C1/C2).
 
 ## Budget / abuse — controls (LLM06 Unbounded Consumption)
 
