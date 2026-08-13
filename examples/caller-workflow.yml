@@ -26,7 +26,7 @@ jobs:
   review:
     name: ${{ matrix.lens-name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     # Run the (paid, model-backed) lenses ONLY for trusted authors, so a stranger
     # can't burn your API budget or feed the model malicious PR content:
     #   - not a fork (fork PRs get no secrets anyway),

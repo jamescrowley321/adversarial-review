@@ -54,7 +54,7 @@ approve). On top of that:
 - **Skip bots** (`dependabot[bot]`) — no tokens on lockfile churn.
 - **`concurrency: cancel-in-progress`** — pushing many commits to one PR cancels
   superseded runs instead of stacking them.
-- **Per-lens `timeout-minutes: 15`** — caps a runaway session.
+- **Per-lens `timeout-minutes: 5`** — caps a runaway session.
 - **Diff caps** (`diff_max_lines` / `diff_max_bytes`) and `diff_ignore_patterns`
   — bound tokens per run; add `paths:` filters to skip docs-only PRs.
 - **Provider-side hard cap** — a dedicated OpenRouter key with a monthly credit
