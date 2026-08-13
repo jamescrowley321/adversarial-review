@@ -109,6 +109,11 @@ lenses it runs on pi and needs the provider secret, so it can't run on fork PRs.
   skips Dependabot).
 - **Fork PRs can't read secrets**, so the gate can't run on them — the example
   skips forks and they stay non-auto-mergeable (a maintainer handles them).
+- **Billing is per-consumer.** The action uses *only* the `api_key` you pass from
+  the consuming repo's own `OPENROUTER_API_KEY` secret — there is no fallback to
+  any other key, and `mode: lens` fails fast if it's missing. Use a **distinct,
+  budget-capped key per repo** so spend is attributed and bounded, and never
+  reuse a personal key inside an org/company repo.
 - Treat PR text as untrusted: the shared contract instructs every lens to ignore
   instructions embedded in the PR title/description/comments (prompt-injection
   defense).

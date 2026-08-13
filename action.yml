@@ -92,6 +92,7 @@ runs:
         IN_LENSES: ${{ inputs.lenses }}
         IN_PR: ${{ inputs.pr_number }}
         EVENT_PR: ${{ github.event.pull_request.number }}
+        IN_KEY: ${{ inputs.api_key }}
       run: |
         const fs = require("fs");
         const append = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`);
@@ -116,6 +117,9 @@ runs:
           const key = (process.env.IN_LENS || "").trim();
           const name = NAMES[key];
           if (!name) die(`Unknown lens '${key}' (expected ${Object.keys(NAMES).join("|")})`);
+          if (!(process.env.IN_KEY || "").trim()) {
+            die("api_key is required for mode: lens — pass your repo's provider key (e.g. secrets.OPENROUTER_API_KEY) as 'api_key'. The action never falls back to any other key.");
+          }
           append("lens_name", name);
         }
 
