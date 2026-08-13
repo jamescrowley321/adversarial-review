@@ -1,0 +1,50 @@
+name: CodeQL
+
+# GitHub's dataflow SAST. For this repo that means two interpreted targets, both
+# build-mode: none (source extraction, no compile):
+#   - actions:                the workflows + action.yml (untrusted-input flows,
+#                             dangerous triggers, permission/injection issues)
+#   - javascript-typescript:  the embedded Node steps and scripts/run-local.mjs
+# Results land in the Security tab (code scanning). Actions pinned to SHA (tag in
+# comment); Dependabot bumps them.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "24 6 * * 1" # Weekly Monday 06:24 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # upload results to code scanning
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        with:
+          category: "/language:${{ matrix.language }}"

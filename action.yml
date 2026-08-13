@@ -118,7 +118,7 @@ runs:
     # ── Consumer checkout (mode=lens): reviewers read surrounding code to confirm findings. ──
     - name: Checkout PR head
       if: inputs.mode == 'lens'
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
@@ -247,7 +247,7 @@ runs:
 
     - name: Upload review session
       if: always() && inputs.mode == 'lens' && steps.pi.outputs.session_html_path
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: pi-review-session-${{ inputs.lens }}
         path: ${{ steps.pi.outputs.session_html_path }}

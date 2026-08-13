@@ -1,0 +1,55 @@
+name: Security
+
+# Secret scanning (gitleaks) + SAST (semgrep). No compiled-language SCA here —
+# this repo ships no runtime dependencies; OSV-Scanner and Dependency Review
+# cover the pinned GitHub Actions. Actions pinned to SHA; Dependabot bumps them.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * *" # Daily 6am UTC (monitor)
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Gitleaks (secret scanning)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  semgrep:
+    name: Semgrep (SAST)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Report-only for now (no --error): findings surface in the Security tab
+      # without blocking, since the auto ruleset can false-positive on the
+      # child_process usage in the local runner. Tighten to --error once tuned.
+      - name: Run Semgrep
+        run: >-
+          semgrep scan --config=auto
+          --sarif --output=semgrep.sarif
+          --exclude="node_modules"
+
+      - name: Upload Semgrep SARIF to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
