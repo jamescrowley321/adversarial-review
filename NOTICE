@@ -5,7 +5,9 @@ This product includes software developed by James Crowley.
 
 Licensed under the Apache License, Version 2.0. See the LICENSE file.
 
-The review personas and the fresh-/blind-context review method derive from the
-author's open-source review framework. See ATTRIBUTION.md. The CI engine is the
-pi coding agent (https://pi.dev) via shaftoe/pi-coding-agent-action, used under
-its own license.
+The review personas and the fresh-/blind-context review method grew out of the
+BMAD Method (https://github.com/bmad-code-org/BMAD-METHOD) code-review workflow
+and the ralph-orchestrator loop (https://github.com/mikeyobrien/ralph-orchestrator).
+The reviewer runtime is the pi coding agent (https://pi.dev), driven in CI via
+shaftoe/pi-coding-agent-action. Each is used under its own license. See
+ATTRIBUTION.md.

@@ -34,6 +34,7 @@ jobs:
           - { lens: acceptance, lens-name: Acceptance Auditor }
           - { lens: sentinel,   lens-name: Sentinel }
           - { lens: viper,      lens-name: Viper }
+          - { lens: compliance, lens-name: Compliance }
     steps:
       - uses: actions/checkout@v4
       - name: ${{ matrix.lens-name }}
@@ -59,4 +60,5 @@ jobs:
         uses: ./
         with:
           mode: gate
+          lenses: blind,edge-case,acceptance,sentinel,viper,compliance
           github_token: ${{ secrets.GITHUB_TOKEN }}

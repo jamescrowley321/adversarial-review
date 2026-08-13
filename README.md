@@ -1,16 +1,18 @@
 # Adversarial Review
 
 **A fresh-context, diff-only adversarial code-review gate for GitHub pull
-requests.** Five skeptical AI review lenses run in parallel — each a *fresh agent
-session that sees only the diff* — post their findings as PR reviews, and a
-fail-closed merge gate blocks the merge on any blocking finding.
+requests.** Skeptical AI review lenses run in parallel — each a *fresh
+[pi](https://pi.dev) agent session that sees only the diff* — post their findings
+as PR reviews, and a fail-closed merge gate blocks the merge on any blocking finding.
 
 Built on the principle that a reviewer which already "saw" the code get written
 is biased toward confirming its own work. So every lens starts cold, with no
 plan, no task state, and no memory of the implementation — it reads the code the
 way an attacker or a new maintainer would.
 
-## The five lenses
+## The lenses
+
+Five adversarial defect-hunters, plus an optional Compliance lens:
 
 | Lens | Looks for | Blocks merge on |
 |------|-----------|-----------------|
@@ -19,6 +21,7 @@ way an attacker or a new maintainer would.
 | **Acceptance Auditor** | Whether every acceptance criterion in the PR body is implemented *and* tested | Unmet / partial ACs |
 | **Sentinel** | Exploitable vulnerabilities (OWASP-aligned), concrete attack scenario required | Confirmed/likely exploits |
 | **Viper** | Red-team attack paths — only active when auth/crypto/middleware/infra changes | Critical/high exploit chains |
+| **Compliance** *(opt-in)* | Policy: AI-provenance disclosure, human accountability, no secrets — plus your own rules | Undisclosed AI PRs, policy violations |
 
 Findings use one severity vocabulary: **MUST FIX** (blocks), **SHOULD FIX**,
 **NITPICK**. Any MUST FIX makes that lens request changes, which fails the gate.
@@ -31,12 +34,12 @@ Findings use one severity vocabulary: **MUST FIX** (blocks), **SHOULD FIX**,
    key with access to the configured model).
 3. In branch protection for `main`, require the **`Merge Gate`** status check.
 
-That's it — every PR to `main` now gets a five-lens adversarial review, and the
+That's it — every PR to `main` now gets a multi-lens adversarial review, and the
 merge is blocked until the MUST FIX findings are resolved.
 
 ## How it works
 
-- The caller runs `mode: lens` as a **5-way matrix** (one parallel job per lens),
+- The caller runs `mode: lens` as a **matrix** (one parallel job per lens),
   then a `mode: gate` job that `needs:` them.
 - Each lens job composes its persona + a shared output contract, runs the
   [pi coding agent](https://pi.dev) (via `shaftoe/pi-coding-agent-action`) routed
@@ -53,7 +56,7 @@ merge is blocked until the MUST FIX findings are resolved.
 | Input | Default | Notes |
 |-------|---------|-------|
 | `mode` | — (required) | `lens` or `gate` |
-| `lens` | — | Required for `mode: lens`: `blind` \| `edge-case` \| `acceptance` \| `sentinel` \| `viper` |
+| `lens` | — | Required for `mode: lens`: `blind` \| `edge-case` \| `acceptance` \| `sentinel` \| `viper` \| `compliance` |
 | `lenses` | `blind,edge-case,acceptance,sentinel,viper` | Gate's expected set — must match the caller matrix |
 | `github_token` | — (required) | `${{ secrets.GITHUB_TOKEN }}`; needs `pull-requests: write` |
 | `api_key` | — | Provider key (required for `mode: lens`) |
@@ -64,12 +67,34 @@ merge is blocked until the MUST FIX findings are resolved.
 | `diff_max_bytes` | `204800` | Diff truncation guard |
 | `diff_ignore_patterns` | lockfiles, build output, vendored code | Space-separated globs |
 | `pr_number` | triggering PR | Override for manual runs |
+| `compliance_rules_file` | `.github/adversarial-review/compliance.md` | Extra Compliance-lens rules (used when `lens: compliance`) |
 
-### Running fewer lenses
+### Running fewer (or more) lenses
 
-Trim the matrix in the caller **and** the gate's `lenses` input to match. To run
+Set the matrix in the caller **and** the gate's `lenses` input to match. To run
 only the correctness lenses, keep `blind,edge-case,acceptance`; add `sentinel`
-and `viper` for security-sensitive repos.
+and `viper` for security-sensitive repos; add `compliance` to enforce policy.
+
+## Compliance & AI-provenance policy
+
+The **Compliance** lens is a review agent for governance rather than defects. It
+reads the PR and enforces a built-in baseline:
+
+- **AI-provenance disclosure** — an AI-assisted PR must state the **harness/agent**
+  and **model(s)** used; a human must attest accountability.
+- **Human accountability** — a named human is responsible for the change.
+- **No committed secrets or private data.**
+
+On top of the baseline it appends **your repo's own rules** from
+`compliance_rules_file` (default `.github/adversarial-review/compliance.md`), so
+each project can enforce its own policy (commit conventions, dependency rules,
+pinned actions, whatever) without changing the action. Pair it with the
+[PR template](.github/pull_request_template.md), which carries the AI-provenance
+block contributors fill in.
+
+Because it's an agent (not a regex), it catches undisclosed AI-authored PRs and
+policy violations the same way the other lenses catch bugs. Like the other
+lenses it runs on pi and needs the provider secret, so it can't run on fork PRs.
 
 ## Cost & operational notes
 
@@ -86,21 +111,26 @@ and `viper` for security-sensitive repos.
 
 ## Local mode (pre-CI)
 
-Run the same lenses against your working tree before you push:
+Run the same lenses against your working tree before you push (Node, no shell):
 
 ```bash
-scripts/run-local.sh --base origin/main            # review your branch vs main
-scripts/run-local.sh --lens sentinel,viper         # a subset
+node scripts/run-local.mjs --base origin/main        # review your branch vs main
+node scripts/run-local.mjs --lens sentinel,viper     # a subset
 ```
 
 Requires the `pi` CLI and a provider key in `OPENROUTER_API_KEY`. Findings are
 written to `.adversarial-review/`.
 
-## Provenance
+## Credits & provenance
 
-The five personas and the fresh-/blind-context review method come from an
-open-source review framework the author has run across several repositories; this
-action packages the hardened CI form of it. See [ATTRIBUTION.md](ATTRIBUTION.md).
+The reviewer runtime is the **[pi coding agent](https://pi.dev)** — every lens is
+a pi session, driven in CI through
+[`shaftoe/pi-coding-agent-action`](https://github.com/shaftoe/pi-coding-agent-action).
+The personas and the fresh-/blind-context review method grew out of the
+**[BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD)** code-review
+workflow and the **[ralph-orchestrator](https://github.com/mikeyobrien/ralph-orchestrator)**
+loop. This action packages the hardened CI form of that framework. Full detail in
+[ATTRIBUTION.md](ATTRIBUTION.md).
 
 ## License
 

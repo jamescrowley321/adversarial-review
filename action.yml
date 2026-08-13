@@ -68,13 +68,17 @@ inputs:
     description: "PR number to review. Defaults to the triggering pull_request."
     required: false
     default: ''
+  compliance_rules_file:
+    description: "Path, in the reviewed repo, to extra Compliance-lens rules appended to the persona (used when lens=compliance). Optional; the built-in baseline (AI-provenance disclosure, human accountability, no committed secrets) always applies."
+    required: false
+    default: '.github/adversarial-review/compliance.md'
 
 runs:
   using: 'composite'
   steps:
     # ── Shared context: resolve the effective PR number and lens display names. ──
     - id: ctx
-      shell: bash
+      shell: node {0}
       env:
         IN_MODE: ${{ inputs.mode }}
         IN_LENS: ${{ inputs.lens }}
@@ -82,40 +86,34 @@ runs:
         IN_PR: ${{ inputs.pr_number }}
         EVENT_PR: ${{ github.event.pull_request.number }}
       run: |
-        set -euo pipefail
-        PR="${IN_PR:-}"
-        [ -z "$PR" ] && PR="${EVENT_PR:-}"
-        if [ -z "$PR" ]; then echo "::error::No PR number (not a pull_request event and pr_number unset)"; exit 1; fi
-        echo "pr_number=$PR" >> "$GITHUB_OUTPUT"
+        const fs = require("fs");
+        const append = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`);
+        const die = (m) => { console.log(`::error::${m}`); process.exit(1); };
 
-        name_of() {
-          case "$1" in
-            blind)      echo "Blind Hunter";;
-            edge-case)  echo "Edge Case Hunter";;
-            acceptance) echo "Acceptance Auditor";;
-            sentinel)   echo "Sentinel";;
-            viper)      echo "Viper";;
-            *)          echo "";;
-          esac
+        const NAMES = {
+          blind: "Blind Hunter",
+          "edge-case": "Edge Case Hunter",
+          acceptance: "Acceptance Auditor",
+          sentinel: "Sentinel",
+          viper: "Viper",
+          compliance: "Compliance",
+        };
+
+        const pr = (process.env.IN_PR || "").trim() || (process.env.EVENT_PR || "").trim();
+        if (!pr) die("No PR number (not a pull_request event and pr_number unset)");
+        append("pr_number", pr);
+
+        if (process.env.IN_MODE === "lens") {
+          const key = (process.env.IN_LENS || "").trim();
+          const name = NAMES[key];
+          if (!name) die(`Unknown lens '${key}' (expected ${Object.keys(NAMES).join("|")})`);
+          append("lens_name", name);
         }
 
-        if [ "$IN_MODE" = "lens" ]; then
-          LN="$(name_of "$IN_LENS")"
-          if [ -z "$LN" ]; then echo "::error::Unknown lens '$IN_LENS' (expected blind|edge-case|acceptance|sentinel|viper)"; exit 1; fi
-          echo "lens_name=$LN" >> "$GITHUB_OUTPUT"
-        fi
-
-        # Gate: build a pipe-separated list of expected display names from the keys.
-        EXP=""
-        IFS=',' read -ra KS <<< "$IN_LENSES"
-        for k in "${KS[@]}"; do
-          k="$(echo "$k" | tr -d '[:space:]')"
-          [ -z "$k" ] && continue
-          n="$(name_of "$k")"
-          if [ -z "$n" ]; then echo "::error::Unknown lens key '$k' in lenses input"; exit 1; fi
-          EXP="${EXP:+$EXP|}$n"
-        done
-        echo "expected=$EXP" >> "$GITHUB_OUTPUT"
+        // Gate: pipe-separated display names from the expected keys.
+        const keys = (process.env.IN_LENSES || "").split(",").map((s) => s.trim()).filter(Boolean);
+        const expected = keys.map((k) => NAMES[k] || die(`Unknown lens key '${k}' in lenses input`));
+        append("expected", expected.join("|"));
 
     # ── Consumer checkout (mode=lens): reviewers read surrounding code to confirm findings. ──
     - name: Checkout PR head
@@ -128,25 +126,35 @@ runs:
     # ── Compose the lens prompt: persona + shared output contract, PR number substituted. ──
     - name: Compose lens prompt
       if: inputs.mode == 'lens'
-      shell: bash
+      shell: node {0}
       env:
         ACTION_PATH: ${{ github.action_path }}
         LENS_KEY: ${{ inputs.lens }}
         PR: ${{ steps.ctx.outputs.pr_number }}
+        RULES_FILE: ${{ inputs.compliance_rules_file }}
       run: |
-        set -euo pipefail
-        LENS_FILE="$ACTION_PATH/lenses/${LENS_KEY}.md"
-        SHARED="$ACTION_PATH/lenses/shared-instructions.md"
-        [ -f "$LENS_FILE" ] || { echo "::error::Missing persona file $LENS_FILE"; exit 1; }
-        [ -f "$SHARED" ] || { echo "::error::Missing shared-instructions.md"; exit 1; }
-        DELIM="PROMPT_EOF_$(printf '%s' "$LENS_KEY$PR" | cksum | tr -d ' ')"
-        {
-          echo "COMPOSED_PROMPT<<$DELIM"
-          sed "s/__PR_NUMBER__/$PR/g" "$LENS_FILE"
-          echo
-          cat "$SHARED"
-          echo "$DELIM"
-        } >> "$GITHUB_ENV"
+        const fs = require("fs");
+        const path = require("path");
+        const die = (m) => { console.log(`::error::${m}`); process.exit(1); };
+
+        const actionPath = process.env.ACTION_PATH;
+        const lensKey = process.env.LENS_KEY;
+        const personaPath = path.join(actionPath, "lenses", `${lensKey}.md`);
+        const sharedPath = path.join(actionPath, "lenses", "shared-instructions.md");
+        if (!fs.existsSync(personaPath)) die(`Missing persona file ${personaPath}`);
+        if (!fs.existsSync(sharedPath)) die("Missing shared-instructions.md");
+
+        let prompt = fs.readFileSync(personaPath, "utf8").split("__PR_NUMBER__").join(process.env.PR) + "\n";
+
+        // Compliance lens: append the reviewed repo's own rules file, if present.
+        const rules = process.env.RULES_FILE;
+        if (lensKey === "compliance" && rules && fs.existsSync(rules)) {
+          prompt += `\n## Project-specific rules (from ${rules})\n\n${fs.readFileSync(rules, "utf8")}\n`;
+        }
+        prompt += "\n" + fs.readFileSync(sharedPath, "utf8");
+
+        const delim = "ADV_REVIEW_PROMPT_EOF";
+        fs.appendFileSync(process.env.GITHUB_ENV, `COMPOSED_PROMPT<<${delim}\n${prompt}\n${delim}\n`);
 
     - name: Run adversarial lens
       id: pi

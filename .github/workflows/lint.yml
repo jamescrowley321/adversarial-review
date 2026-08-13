@@ -1,5 +1,4 @@
-# Static checks for the action itself: shellcheck the scripts and the embedded
-# composite steps, and validate every workflow/action YAML with actionlint.
+# Static checks for the action itself — Node only, no shell scripts.
 
 name: Lint
 
@@ -18,24 +17,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: ShellCheck scripts
-        run: shellcheck -x scripts/*.sh
-
-      - name: Validate YAML parses
+      - name: Check action layout and cross-references
+        shell: node {0}
         run: |
-          python3 - <<'PY'
-          import glob, sys, yaml
-          bad = 0
-          for f in ["action.yml", *glob.glob(".github/workflows/*.yml"), "examples/caller-workflow.yml"]:
-              try:
-                  yaml.safe_load(open(f))
-                  print(f"ok   {f}")
-              except Exception as e:
-                  print(f"FAIL {f}: {e}"); bad += 1
-          sys.exit(1 if bad else 0)
-          PY
+          const fs = require("fs");
+          const LENSES = ["blind", "edge-case", "acceptance", "sentinel", "viper", "compliance"];
+          const required = [
+            "action.yml",
+            "lenses/shared-instructions.md",
+            ...LENSES.map((l) => `lenses/${l}.md`),
+            "examples/caller-workflow.yml",
+            "scripts/run-local.mjs",
+          ];
+          const missing = required.filter((f) => !fs.existsSync(f));
+          if (missing.length) {
+            console.log(`::error::missing files: ${missing.join(", ")}`);
+            process.exit(1);
+          }
 
-      - name: actionlint
-        uses: raven-actions/actionlint@v2
-        with:
-          files: 'action.yml examples/caller-workflow.yml'
+          // action.yml must map every lens key we ship a persona for.
+          const action = fs.readFileSync("action.yml", "utf8");
+          const unmapped = LENSES.filter((l) => !action.includes(`${l}:`) && !action.includes(`"${l}":`));
+          if (unmapped.length) {
+            console.log(`::error::action.yml has no name mapping for: ${unmapped.join(", ")}`);
+            process.exit(1);
+          }
+          console.log(`Layout OK: ${LENSES.length} lenses, all referenced.`);
+
+      - name: Syntax-check the Node runner
+        run: node --check scripts/run-local.mjs

@@ -42,6 +42,9 @@ jobs:
           - { lens: acceptance, lens-name: Acceptance Auditor }
           - { lens: sentinel,   lens-name: Sentinel }
           - { lens: viper,      lens-name: Viper }
+          # Compliance enforces the AI-provenance policy + this repo's own rules
+          # (.github/adversarial-review/compliance.md). Drop it to disable.
+          - { lens: compliance, lens-name: Compliance }
     steps:
       - name: ${{ matrix.lens-name }}
         uses: jamescrowley321/adversarial-review@v1
@@ -69,5 +72,5 @@ jobs:
         uses: jamescrowley321/adversarial-review@v1
         with:
           mode: gate
-          lenses: blind,edge-case,acceptance,sentinel,viper
+          lenses: blind,edge-case,acceptance,sentinel,viper,compliance
           github_token: ${{ secrets.GITHUB_TOKEN }}
