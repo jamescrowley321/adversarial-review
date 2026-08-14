@@ -1,5 +1,6 @@
-# Local-mode output
-.adversarial-review/
+# Adversarial Review: local-mode output is ephemeral, but persona overrides in
+# .adversarial-review/lenses/ are committed — so ignore only the output dir.
+.adversarial-review/out/
 review-diff.patch
 
 # Editors / OS

@@ -3,7 +3,8 @@
 //
 // Runs the review personas against your working branch BEFORE you push, using
 // the pi CLI. Each lens reads the branch diff and writes its findings to
-// .adversarial-review/<lens>.md. Language-agnostic.
+// .adversarial-review/out/<lens>.md. A repo can override any persona by committing
+// .adversarial-review/lenses/<lens>.md (trusted local tuning). Language-agnostic.
 //
 // Usage:
 //   node scripts/run-local.mjs                     # adversarial lenses vs origin/main
@@ -21,18 +22,14 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LENS_DIR = join(ROOT, "lenses");
-const OUT = ".adversarial-review";
+const OUT = ".adversarial-review/out";              // ephemeral: diff + per-lens findings
+const OVERRIDE_DIR = ".adversarial-review/lenses";  // committed: per-repo persona overrides
 
-// Local mode reviews code; the Compliance lens is a PR-time policy check, so it
-// is not part of the default local set (add it explicitly with --lens if wanted).
-const NAMES = {
-  blind: "Blind Hunter",
-  "edge-case": "Edge Case Hunter",
-  acceptance: "Acceptance Auditor",
-  sentinel: "Sentinel",
-  viper: "Viper",
-  compliance: "Compliance",
-};
+// The lens registry is the shared, harness-neutral manifest — one source of truth.
+// (Local mode reviews code; Compliance is a PR-time policy check, so it is not in
+// the default local set — add it explicitly with --lens if wanted.)
+const manifest = JSON.parse(readFileSync(join(LENS_DIR, "manifest.json"), "utf8"));
+const NAMES = Object.fromEntries(manifest.lenses.map((l) => [l.key, l.name]));
 
 function printHelp() {
   console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n")
@@ -74,8 +71,11 @@ console.log(`Diff: ${diff.split("\n").length} lines vs ${base}`);
 for (const key of lenses) {
   const name = NAMES[key];
   if (!name) { console.log(`skip: unknown lens '${key}'`); continue; }
-  const personaPath = join(LENS_DIR, `${key}.md`);
+  // A committed local override wins over the base persona (trusted, static tuning).
+  const overridePath = join(OVERRIDE_DIR, `${key}.md`);
+  const personaPath = existsSync(overridePath) ? overridePath : join(LENS_DIR, `${key}.md`);
   if (!existsSync(personaPath)) { console.log(`skip: missing ${personaPath}`); continue; }
+  if (personaPath === overridePath) console.log(`  (local override: ${overridePath})`);
 
   const persona = readFileSync(personaPath, "utf8").split("__PR_NUMBER__").join("N/A (local review)");
   const prompt = [

@@ -10,6 +10,11 @@ is biased toward confirming its own work. So every lens starts cold, with no
 plan, no task state, and no memory of the implementation — it reads the code the
 way an attacker or a new maintainer would.
 
+The reviewer personas are plain, harness-neutral markdown. The same lenses run as
+a **GitHub Action** (the CI merge gate), a **Claude Code plugin**
+(`/adversarial-review`), and templates for **Codex** and **Cursor** — plus a local
+pre-push runner. Tune a lens once; every harness picks it up.
+
 ## The lenses
 
 Five adversarial defect-hunters, plus optional Compliance and OWASP lenses — all
@@ -141,8 +146,10 @@ reads the PR and enforces a built-in baseline:
 - **No committed secrets or private data.**
 
 In CI the Compliance lens enforces **only** this trusted baseline — it does not
-read any rules file out of the pull request under review, so a PR can't weaken
-its own policy check (prompt-injection safety). Pair the lens with the
+read any rules file out of the pull request under review, so a PR can't weaken its
+own policy check (prompt-injection safety). To add project-specific policy for
+**local** review, commit `.adversarial-review/lenses/compliance.md` (a trusted
+override the local harnesses read). Pair the lens with the
 [PR template](.github/pull_request_template.md), which carries the AI-provenance
 block contributors fill in.
 
@@ -183,6 +190,32 @@ to pin exactly. Releases are cut with [release-please]; see
   budget-capped, repo-scoped key and keep secrets withheld from fork PRs — see
   [SECURITY.md → protecting your provider key](SECURITY.md#hardening-protecting-your-provider-key)
   (including why an approval environment does *not* close the collaborator path).
+
+## Use it in your editor / harness
+
+The lenses are one markdown library ([`lenses/`](lenses)) with thin per-harness
+adapters, so the same personas review your code in CI *and* in your editor:
+
+- **Claude Code** — install the plugin, then run
+  `/adversarial-review:review` on your working diff, or invoke a single
+  lens (e.g. the `sentinel` agent):
+
+  ```
+  /plugin marketplace add jamescrowley321/adversarial-review
+  /plugin install adversarial-review@adversarial-review
+  ```
+
+- **Codex / Cursor** — copy the template from [`adapters/`](adapters) into your
+  repo (`AGENTS.md` for Codex, `.cursor/rules/` for Cursor) and vendor `lenses/`.
+- **pi (local)** — `node scripts/run-local.mjs` (below).
+
+### Tune a lens per repo (override)
+
+Commit `.adversarial-review/lenses/<key>.md` to *replace* a base persona for your
+repo (e.g. a PHI/PII-tuned `sentinel.md`). The **local** harnesses read it — it's
+your own trusted file. **CI (the pi Action) never reads it**: a pull request must
+not be able to rewrite its own reviewer (OWASP LLM01), so the gate always runs the
+pinned base set. See [`lenses/README.md`](lenses/README.md).
 
 ## Local mode (pre-CI)
 

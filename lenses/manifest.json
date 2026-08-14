@@ -1,0 +1,63 @@
+{
+  "manifest_version": 1,
+  "shared_instructions": "shared-instructions.md",
+  "consumer_override_dir": ".adversarial-review/lenses",
+  "lenses": [
+    {
+      "key": "blind",
+      "name": "Blind Hunter",
+      "activation": "always",
+      "default_enabled": true,
+      "summary": "Zero-context logic bugs, off-by-one, unhandled errors, footguns."
+    },
+    {
+      "key": "edge-case",
+      "name": "Edge Case Hunter",
+      "activation": "always",
+      "default_enabled": true,
+      "summary": "Unhandled branches, boundaries, and async gaps."
+    },
+    {
+      "key": "acceptance",
+      "name": "Acceptance Auditor",
+      "activation": "always",
+      "default_enabled": true,
+      "summary": "Verifies the PR's stated acceptance criteria are met and tested."
+    },
+    {
+      "key": "sentinel",
+      "name": "Sentinel",
+      "activation": "always",
+      "default_enabled": true,
+      "summary": "Exploitable auth / PHI / PII / tenant-isolation vulnerabilities."
+    },
+    {
+      "key": "viper",
+      "name": "Viper",
+      "activation": "security-surface",
+      "default_enabled": true,
+      "summary": "Red-team attack paths; self-skips when no auth/middleware/infra surface."
+    },
+    {
+      "key": "compliance",
+      "name": "Compliance",
+      "activation": "always",
+      "default_enabled": false,
+      "summary": "AI-provenance disclosure, human accountability, no committed secrets."
+    },
+    {
+      "key": "owasp-web",
+      "name": "OWASP Web Top 10",
+      "activation": "always",
+      "default_enabled": false,
+      "summary": "OWASP Web Application Top 10 (2021)."
+    },
+    {
+      "key": "owasp-llm",
+      "name": "OWASP LLM Top 10",
+      "activation": "llm-surface",
+      "default_enabled": false,
+      "summary": "OWASP GenAI/LLM Top 10 (2026); self-skips when no LLM/AI surface."
+    }
+  ]
+}
