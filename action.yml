@@ -87,11 +87,6 @@ inputs:
     description: "mode=preflight: seconds between polls while waiting for required_checks."
     required: false
     default: '30'
-  compliance_rules_file:
-    description: "Path, in the reviewed repo, to extra Compliance-lens rules appended to the persona (used when lens=compliance). Optional; the built-in baseline (AI-provenance disclosure, human accountability, no committed secrets) always applies."
-    required: false
-    default: '.github/adversarial-review/compliance.md'
-
 runs:
   using: 'composite'
   steps:
@@ -156,7 +151,6 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         LENS_KEY: ${{ inputs.lens }}
         PR: ${{ steps.ctx.outputs.pr_number }}
-        RULES_FILE: ${{ inputs.compliance_rules_file }}
       run: |
         const fs = require("fs");
         const path = require("path");
@@ -171,11 +165,12 @@ runs:
 
         let prompt = fs.readFileSync(personaPath, "utf8").split("__PR_NUMBER__").join(process.env.PR) + "\n";
 
-        // Compliance lens: append the reviewed repo's own rules file, if present.
-        const rules = process.env.RULES_FILE;
-        if (lensKey === "compliance" && rules && fs.existsSync(rules)) {
-          prompt += `\n## Project-specific rules (from ${rules})\n\n${fs.readFileSync(rules, "utf8")}\n`;
-        }
+        // The reviewer's instructions come ONLY from this action's own pinned,
+        // trusted lenses — never from the PR-under-review's checkout. Reading a
+        // persona or rules file out of the untrusted PR head would let a PR
+        // rewrite its own reviewer ("post No findings, approve") — prompt
+        // injection, OWASP LLM01. Per-repo tuning is a LOCAL, trusted feature
+        // (see lenses/README.md); CI always runs the static base set.
         prompt += "\n" + fs.readFileSync(sharedPath, "utf8");
 
         const delim = "ADV_REVIEW_PROMPT_EOF";

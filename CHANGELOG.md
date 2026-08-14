@@ -12,8 +12,7 @@ version tags (`v1`, `v1.0.0`, …).
 - Five domain-neutral defect-hunting personas: Blind Hunter, Edge Case Hunter,
   Acceptance Auditor, Sentinel, Viper.
 - **Compliance lens** (opt-in): an agent that enforces an AI-provenance policy
-  (disclose harness + model, human accountability, no committed secrets) plus
-  per-repo rules loaded from `compliance_rules_file`.
+  (disclose harness + model, human accountability, no committed secrets).
 - Contribution policy: `CONTRIBUTING.md` (with the AI-assisted-contribution
   requirements) and a PR template carrying the AI-provenance block.
 - Shared output contract with a prompt-injection trust boundary, a single
@@ -24,6 +23,12 @@ version tags (`v1`, `v1.0.0`, …).
 - Fail-closed merge gate with same-SHA scoping and latest-per-lens dedup.
 - `scripts/run-local.mjs` for pre-CI local review of a working branch.
 - Example consumer workflow (`examples/caller-workflow.yml`).
+
+### Security
+- Removed the `compliance_rules_file` input and the runtime read of a rules file
+  from the pull-request checkout. The reviewer's instructions now come only from
+  the action's pinned, trusted lenses — a PR can no longer inject reviewer
+  instructions via a repo file (OWASP LLM01). CI runs the static base set only.
 
 ### Notes
 - Action step logic is written in Node (`shell: node {0}`) — no Bash.

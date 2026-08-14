@@ -1,14 +1,12 @@
 <!--
-Project-specific Compliance-lens rules for THIS repository.
+Project-specific Compliance-lens rules for THIS repository — REFERENCE ONLY.
 
-The Compliance lens always enforces its built-in baseline (AI-provenance
-disclosure, human accountability, no committed secrets). Anything you write here
-is ADDED on top of that baseline. Keep rules concrete and checkable; give each a
-severity (MUST FIX / SHOULD FIX / NITPICK).
-
-Consumers of the action: drop your own version of this file at
-`.github/adversarial-review/compliance.md` (or point `compliance_rules_file` at
-another path) to enforce your own policy.
+As of the injection-safe change, the Action no longer reads any rules file out of
+the PR checkout, so this file is NOT auto-loaded in CI (CI enforces only the
+built-in baseline: AI-provenance disclosure, human accountability, no committed
+secrets). It documents this repo's policy and can be used as a LOCAL override by
+committing an equivalent full persona at `.adversarial-review/lenses/compliance.md`.
+Keep rules concrete and checkable; give each a severity (MUST FIX / SHOULD FIX / NITPICK).
 -->
 
 - **Conventional Commits.** The PR title and commits must follow Conventional
