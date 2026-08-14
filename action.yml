@@ -151,6 +151,7 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         LENS_KEY: ${{ inputs.lens }}
         PR: ${{ steps.ctx.outputs.pr_number }}
+        REPO: ${{ github.repository }}
       run: |
         const fs = require("fs");
         const path = require("path");
@@ -163,7 +164,19 @@ runs:
         if (!fs.existsSync(personaPath)) die(`Missing persona file ${personaPath}`);
         if (!fs.existsSync(sharedPath)) die("Missing shared-instructions.md");
 
-        let prompt = fs.readFileSync(personaPath, "utf8").split("__PR_NUMBER__").join(process.env.PR) + "\n";
+        // Hand the agent the exact repo + PR from trusted GitHub Actions context
+        // (never from PR content), so get_pr_diff / get_issue_or_pr_thread resolve
+        // without guessing. The read+review-only tool allowlist otherwise leaves
+        // the agent no way to self-discover owner/repo, and it fails the diff fetch.
+        const repo = (process.env.REPO || "").trim();          // "owner/name"
+        const [owner, name] = repo.split("/");
+        const target =
+          `You are reviewing GitHub pull request #${process.env.PR} in repository ` +
+          `\`${repo}\`. When you call \`get_pr_diff\` or \`get_issue_or_pr_thread\`, pass ` +
+          `exactly owner=\`${owner}\`, repo=\`${name}\`, pull_number=${process.env.PR}. ` +
+          `Do not guess or try other owner/repo values.\n\n`;
+
+        let prompt = target + fs.readFileSync(personaPath, "utf8").split("__PR_NUMBER__").join(process.env.PR) + "\n";
 
         // The reviewer's instructions come ONLY from this action's own pinned,
         // trusted lenses — never from the PR-under-review's checkout. Reading a
