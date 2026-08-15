@@ -40,6 +40,10 @@ Findings use one severity vocabulary: **MUST FIX** (blocks), **SHOULD FIX**,
 That's it — every PR to `main` now gets a multi-lens adversarial review, and the
 merge is blocked until the MUST FIX findings are resolved.
 
+> The example already grants what the lenses need: **`issues: read`** (the Compliance
+> lens reads the PR thread) and **`timeout-minutes: 15`** on the review job (verbose
+> security lenses run 6–8 min on a large diff). Keep both if you adapt it.
+
 ## How it works
 
 - The caller runs `mode: lens` as a **matrix** (one parallel job per lens),
