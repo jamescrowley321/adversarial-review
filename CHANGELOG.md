@@ -6,6 +6,8 @@ version tags (`v1`, `v1.0.0`, …).
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-08-15
+
 ### Added
 - Initial extraction of the adversarial-review gate into a standalone,
   reusable composite GitHub Action (`mode: lens` and `mode: gate`).

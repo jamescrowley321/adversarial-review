@@ -24,6 +24,7 @@ permissions:
   contents: read
   pull-requests: write
   checks: write
+  issues: read        # the Compliance lens reads the PR thread (get_issue_or_pr_thread)
 
 jobs:
   # ── Config: the ONE place to toggle lenses. Emits the enabled set as a matrix
@@ -90,7 +91,9 @@ jobs:
     name: ${{ matrix.name }}
     needs: [config, preflight]
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Verbose security lenses (Viper's 3-stage analysis, the OWASP lenses) can run
+    # 6-8 min on a large diff — give them headroom so they aren't cut off mid-review.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.config.outputs.matrix) }}
