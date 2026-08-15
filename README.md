@@ -70,7 +70,6 @@ merge is blocked until the MUST FIX findings are resolved.
 | `diff_max_bytes` | `204800` | Diff truncation guard |
 | `diff_ignore_patterns` | lockfiles, build output, vendored code | Space-separated globs |
 | `pr_number` | triggering PR | Override for manual runs |
-| `compliance_rules_file` | `.github/adversarial-review/compliance.md` | Extra Compliance-lens rules (used when `lens: compliance`) |
 
 ### Toggling lenses
 
@@ -115,10 +114,9 @@ reads the PR and enforces a built-in baseline:
 - **Human accountability** — a named human is responsible for the change.
 - **No committed secrets or private data.**
 
-On top of the baseline it appends **your repo's own rules** from
-`compliance_rules_file` (default `.github/adversarial-review/compliance.md`), so
-each project can enforce its own policy (commit conventions, dependency rules,
-pinned actions, whatever) without changing the action. Pair it with the
+In CI the Compliance lens enforces **only** this trusted baseline — it does not
+read any rules file out of the pull request under review, so a PR can't weaken
+its own policy check (prompt-injection safety). Pair the lens with the
 [PR template](.github/pull_request_template.md), which carries the AI-provenance
 block contributors fill in.
 

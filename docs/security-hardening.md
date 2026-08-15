@@ -97,8 +97,10 @@ The plan makes that explicit and adds LLM coverage:
 - ✅ **Phase 2 — `owasp-llm` lens** (opt-in): the GenAI/LLM Top 10 2026
   (LLM01–LLM10), tagged `LLM0x`, activating only when the diff touches AI/LLM
   surface. Notes when the OWASP **Agentic (ASI) Top 10** also applies.
-- 🔭 **Phase 3 — OWASP rule packs** as `compliance_rules_file` presets, so a repo
-  can also enforce an OWASP checklist through the Compliance lens.
+- 🔭 **Phase 3 — per-repo OWASP tuning** via a committed
+  `.adversarial-review/lenses/owasp-web.md` (or `owasp-llm.md`) override that the
+  local harnesses read, so a repo can tighten the checklist to its domain. CI keeps
+  running the pinned base packs (injection-safe — no rule text from the PR checkout).
 - ✅ **Reflexive check:** the self-review workflow runs `owasp-llm` on *this* repo
   — LLM01 and LLM06 are exactly the controls above, and this document is the
   residual-risk record.
