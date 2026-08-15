@@ -233,7 +233,7 @@ runs:
           core.info(`"${header}" well-formed review on ${headSha.slice(0, 12)}: ${ok}`);
           return ok ? "true" : "false";
 
-    # ── Retry ONCE on a flaky/empty first attempt. Same composed prompt, so it can't drift. ──
+    # ── Retry on a flaky/empty attempt (up to twice — model output is flaky under concurrent load). Same composed prompt, so it can't drift. ──
     - name: Retry adversarial lens
       id: pi_retry
       if: always() && inputs.mode == 'lens' && steps.check.outputs.result != 'true'
@@ -251,7 +251,51 @@ runs:
         export_session_html: true
         prompt: ${{ env.COMPOSED_PROMPT }}
 
-    # ── Fail THIS lens job (attributably) if no well-formed review exists after the retry. ──
+    # ── Re-check; retry a SECOND time if still nothing landed. ──
+    - name: Check lens review landed (after retry 1)
+      id: check2
+      if: always() && inputs.mode == 'lens' && steps.check.outputs.result != 'true'
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        LENS_NAME: ${{ steps.ctx.outputs.lens_name }}
+        PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
+      with:
+        result-encoding: string
+        script: |
+          const headSha = context.payload.pull_request.head.sha;
+          const header = `## ${process.env.LENS_NAME}`;
+          const reviews = await github.paginate(github.rest.pulls.listReviews, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: Number(process.env.PR_NUMBER),
+            per_page: 100,
+          });
+          const isBot = (r) =>
+            r.user && (r.user.login === "github-actions[bot]" || r.user.login === "github-actions");
+          const ok = reviews.some(
+            (r) => r.commit_id === headSha && isBot(r) && (r.body || "").trim().startsWith(header),
+          );
+          core.info(`"${header}" landed after retry 1 on ${headSha.slice(0, 12)}: ${ok}`);
+          return ok ? "true" : "false";
+
+    - name: Retry adversarial lens (2)
+      id: pi_retry2
+      if: always() && inputs.mode == 'lens' && steps.check.outputs.result != 'true' && steps.check2.outputs.result != 'true'
+      uses: shaftoe/pi-coding-agent-action@0698813906fb1f23425bd742510e3080d624840d # v2.27.0
+      with:
+        github_token: ${{ inputs.github_token }}
+        provider: ${{ inputs.provider }}
+        model: ${{ inputs.model }}
+        token: ${{ inputs.api_key }}
+        thinking_level: ${{ inputs.thinking_level }}
+        diff_max_lines: ${{ inputs.diff_max_lines }}
+        diff_max_bytes: ${{ inputs.diff_max_bytes }}
+        diff_ignore_patterns: ${{ inputs.diff_ignore_patterns }}
+        loaded_tools: ${{ inputs.loaded_tools }}
+        export_session_html: true
+        prompt: ${{ env.COMPOSED_PROMPT }}
+
+    # ── Fail THIS lens job (attributably) if no well-formed review exists after the retries. ──
     - name: Fail if lens produced no review
       if: always() && inputs.mode == 'lens' && steps.check.outputs.result != 'true'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -275,7 +319,7 @@ runs:
           );
           if (!ok) {
             core.setFailed(
-              `Lens "${process.env.LENS_NAME}" posted no well-formed review after one retry ` +
+              `Lens "${process.env.LENS_NAME}" posted no well-formed review after two retries ` +
               `(flaky/empty model output). Re-run this job to retry.`,
             );
           }
