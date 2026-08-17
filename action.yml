@@ -245,12 +245,20 @@ runs:
           // Try the whole thing first (happy path: JSON only).
           try { parsed = JSON.parse(raw); } catch (_) {}
           if (!parsed) {
-            // Fallback: last {...} region in the message.
-            const start = raw.lastIndexOf("{");
-            const end = raw.lastIndexOf("}");
+            // Strip markdown fences and code spans, then take the last {...}.
+            const stripped = raw
+              .replace(/```(?:json)?/gi, "")
+              .replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, "$1");
+            const start = stripped.lastIndexOf("{");
+            const end = stripped.lastIndexOf("}");
             if (start !== -1 && end > start) {
-              try { parsed = JSON.parse(raw.slice(start, end + 1)); } catch (e) {
-                return fail(`agent response was not valid JSON (${e.message}). Re-run this job to retry.`);
+              try { parsed = JSON.parse(stripped.slice(start, end + 1)); } catch (e) {
+                // Last resort: the last {...} in the RAW message.
+                const s = raw.lastIndexOf("{"), e2 = raw.lastIndexOf("}");
+                if (s !== -1 && e2 > s) {
+                  try { parsed = JSON.parse(raw.slice(s, e2 + 1)); } catch (_) {}
+                }
+                if (!parsed) return fail(`agent response was not valid JSON (${e.message}). Re-run this job to retry.`);
               }
             }
           }
@@ -298,6 +306,8 @@ runs:
             owner, repo, pull_number: prNumber, per_page: 100,
           });
           // Map of path -> Set of changed line numbers (from unified-diff hunks).
+          // Only count real added lines (`+`, not the `+++ ` file header) so the
+          // anchor line is always a valid new-file line number >= 1.
           const changedLinesByPath = new Map();
           for (const f of files) {
             const set = new Set();
@@ -305,6 +315,7 @@ runs:
             for (const h of (f.patch || "").split("\n")) {
               const m = h.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
               if (m) { line = Number(m[1]); continue; }
+              if (h.startsWith("+++") || h.startsWith("---")) continue; // file headers
               if (h.startsWith("+")) { set.add(line); line++; continue; }
               if (h.startsWith("-") || h.startsWith("\\")) continue;
               if (h.startsWith(" ")) line++;

@@ -41,12 +41,14 @@ on code you cannot see, say so and lower your confidence rather than assume.
   degraded behavior.
 - **NITPICK** — style, naming, minor cleanup.
 
-## Output — emit ONE JSON object as your final message
+## Output — emit ONE JSON object as your final message (THIS IS THE ONLY THING THAT POSTS THE REVIEW)
 
-Your final assistant message MUST be a single JSON object (and nothing else
-after it). The workflow parses this JSON and posts the PR review; it does NOT
-read any prose you write outside the JSON. If you write findings only as prose,
-no review will be posted and your lens job will fail.
+**If you do not emit valid JSON, no review is posted and your lens job FAILS.**
+Do all your reasoning in earlier turns. Your FINAL assistant message must be a
+single JSON object and NOTHING ELSE — no prose before it, no prose after it,
+no markdown fences, no "Here are my findings:" preamble. The workflow parses
+this JSON and posts the PR review; it reads NOTHING outside the JSON. Writing
+findings as prose (even well-structured prose) = a failed lens, every time.
 
 The shape (copy this, fill in):
 
