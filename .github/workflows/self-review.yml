@@ -41,7 +41,7 @@ jobs:
           const NAMES = {
             blind: "Blind Hunter", "edge-case": "Edge Case Hunter",
             acceptance: "Acceptance Auditor", sentinel: "Sentinel", viper: "Viper",
-            compliance: "Compliance", "owasp-web": "OWASP Web Top 10",
+            compliance: "Compliance Auditor", "owasp-web": "OWASP Web Top 10",
             "owasp-llm": "OWASP LLM Top 10",
           };
           const keys = (process.env.ENABLED || "").split("\n")
@@ -64,6 +64,11 @@ jobs:
       github.actor != 'dependabot[bot]'
     strategy:
       fail-fast: false
+      # Cap concurrency at 2 to avoid OpenRouter 429s (8 parallel Opus calls
+      # rate-limited on the test run). Lenses post deterministically now, so
+      # parallelism is safe; this just eases provider pressure. Drop to unset
+      # (full parallel) if your provider/key tolerates it.
+      max-parallel: 2
       matrix: ${{ fromJSON(needs.config.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

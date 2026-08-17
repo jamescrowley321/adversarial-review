@@ -113,7 +113,7 @@ runs:
           acceptance: "Acceptance Auditor",
           sentinel: "Sentinel",
           viper: "Viper",
-          compliance: "Compliance",
+          compliance: "Compliance Auditor",
           "owasp-web": "OWASP Web Top 10",
           "owasp-llm": "OWASP LLM Top 10",
         };
@@ -234,31 +234,41 @@ runs:
           const SEVERITIES = new Set(["MUST FIX", "SHOULD FIX", "NITPICK"]);
 
           // ── 1. Extract the JSON object from the agent's final message. ──
-          // The instructions ask for JSON only, but be tolerant: find the last
-          // balanced {...} block so prose preamble / stray fences don't break us.
+          // The instructions ask for JSON only, but be tolerant: models often emit
+          // a short prose preamble ("I'll fetch the diff.") before the JSON, or
+          // wrap it in ```json fences. Strategy: strip fences, then walk brace
+          // depth from the FIRST `{` to its MATCHING `}` (a lastIndexOf approach
+          // breaks on nested objects like findings:[{...}], pointing at an inner
+          // brace). Try the whole message first as the fast path.
           const raw = process.env.AGENT_RESPONSE || "";
           const fail = (m) => { core.setFailed(`Lens "${lensName}" — ${m}`); return null; };
           if (!raw.trim()) {
             return fail(`agent produced no output (steps.pi.outputs.response empty; agent_success=${process.env.AGENT_SUCCESS}). Re-run this job to retry.`);
           }
+          // Strip ```json / ``` fences so a fenced block parses as the whole.
+          const fenceStripped = raw.replace(/```(?:json)?/gi, "").trim();
           let parsed = null;
-          // Try the whole thing first (happy path: JSON only).
-          try { parsed = JSON.parse(raw); } catch (_) {}
+          try { parsed = JSON.parse(fenceStripped); } catch (_) {}
           if (!parsed) {
-            // Strip markdown fences and code spans, then take the last {...}.
-            const stripped = raw
-              .replace(/```(?:json)?/gi, "")
-              .replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, "$1");
-            const start = stripped.lastIndexOf("{");
-            const end = stripped.lastIndexOf("}");
-            if (start !== -1 && end > start) {
-              try { parsed = JSON.parse(stripped.slice(start, end + 1)); } catch (e) {
-                // Last resort: the last {...} in the RAW message.
-                const s = raw.lastIndexOf("{"), e2 = raw.lastIndexOf("}");
-                if (s !== -1 && e2 > s) {
-                  try { parsed = JSON.parse(raw.slice(s, e2 + 1)); } catch (_) {}
+            // Walk from the first `{` to its matching `}`, skipping braces inside
+            // string literals (so `{` inside a JSON string value doesn't fool us).
+            const start = fenceStripped.indexOf("{");
+            if (start !== -1) {
+              let depth = 0, inStr = false, esc = false, end = -1;
+              for (let i = start; i < fenceStripped.length; i++) {
+                const c = fenceStripped[i];
+                if (inStr) {
+                  if (esc) esc = false;
+                  else if (c === "\\") esc = true;
+                  else if (c === '"') inStr = false;
+                } else if (c === '"') inStr = true;
+                else if (c === "{") depth++;
+                else if (c === "}") { depth--; if (depth === 0) { end = i; break; } }
+              }
+              if (end > start) {
+                try { parsed = JSON.parse(fenceStripped.slice(start, end + 1)); } catch (e) {
+                  return fail(`agent response was not valid JSON (${e.message}). Re-run this job to retry.`);
                 }
-                if (!parsed) return fail(`agent response was not valid JSON (${e.message}). Re-run this job to retry.`);
               }
             }
           }
@@ -267,8 +277,19 @@ runs:
           }
 
           // ── 2. Validate the schema. ──
-          if (parsed.lens !== lensName) {
-            return fail(`agent emitted lens="${parsed.lens}" but this job is "${lensName}". Re-run this job to retry.`);
+          // Lens name: accept case-insensitive match OR one containing the other,
+          // so a persona that calls itself "Compliance Auditor" validates against
+          // a lens keyed "compliance" (display "Compliance"). Exact match is the
+          // common case; the fuzzy check is defensive against persona naming drift.
+          const emittedLens = String(parsed.lens || "").trim();
+          const norm = (s) => s.toLowerCase();
+          const lensOk = emittedLens && (
+            norm(emittedLens) === norm(lensName) ||
+            norm(emittedLens).includes(norm(lensName)) ||
+            norm(lensName).includes(norm(emittedLens))
+          );
+          if (!lensOk) {
+            return fail(`agent emitted lens="${emittedLens}" but this job is "${lensName}". Re-run this job to retry.`);
           }
           const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
           let findings = Array.isArray(parsed.findings) ? parsed.findings : null;

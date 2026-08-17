@@ -51,7 +51,7 @@ jobs:
           const NAMES = {
             blind: "Blind Hunter", "edge-case": "Edge Case Hunter",
             acceptance: "Acceptance Auditor", sentinel: "Sentinel", viper: "Viper",
-            compliance: "Compliance", "owasp-web": "OWASP Web Top 10",
+            compliance: "Compliance Auditor", "owasp-web": "OWASP Web Top 10",
             "owasp-llm": "OWASP LLM Top 10",
           };
           const keys = (process.env.ENABLED || "").split("\n")
