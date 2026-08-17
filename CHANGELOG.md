@@ -5,6 +5,13 @@ All notable changes to this project are documented here. Format loosely follows
 version tags (`v1`, `v1.0.0`, …).
 
 ## [Unreleased]
+### Changed
+- Removed automatic per-lens retry from `mode: lens`. Each lens now runs
+  exactly once; if the model posts an empty/malformed (non-`## <Lens>`) review,
+  the lens job fails loudly and attributably so a human re-runs it. The double
+  retry (up to 3 model calls per lens per trigger) was burning provider tokens
+  under concurrent load with little reliability benefit. End users who want
+  retry can add it in their caller workflow.
 
 ## [1.3.1] — 2026-08-15
 
@@ -20,8 +27,8 @@ version tags (`v1`, `v1.0.0`, …).
 - Shared output contract with a prompt-injection trust boundary, a single
   severity vocabulary (MUST FIX / SHOULD FIX / NITPICK), and a strict
   `## <Lens>` review envelope for gate parsing.
-- Per-lens "review landed" verification, one retry on flaky/empty output, and
-  attributable fail-loud.
+- Per-lens "review landed" verification and attributable fail-loud (no
+  automatic retry — see [Unreleased]).
 - Fail-closed merge gate with same-SHA scoping and latest-per-lens dedup.
 - `scripts/run-local.mjs` for pre-CI local review of a working branch.
 - Example consumer workflow (`examples/caller-workflow.yml`).

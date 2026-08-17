@@ -52,8 +52,10 @@ merge is blocked until the MUST FIX findings are resolved.
   [pi coding agent](https://pi.dev) (via `shaftoe/pi-coding-agent-action`) routed
   through OpenRouter, and the agent posts a `## <Lens>` PR review.
 - **Flake handling:** each lens verifies its own review actually landed on the
-  head commit, retries once, then **fails loudly and attributably** — so a
-  re-run targets the one flaky lens, never a silent miscount.
+  head commit, then **fails loudly and attributably** if it didn't — so a
+  re-run targets the one flaky lens, never a silent miscount. There is **no
+  automatic retry** (each lens runs once); end users can wire their own retry
+  if they're willing to spend on duplicate model calls.
 - **The gate** counts only well-formed reviews on the head SHA, keeps the latest
   per lens (so a stale `CHANGES_REQUESTED` from an earlier attempt can't block a
   clean re-run), and **fails closed** if any lens is missing or requested changes.
