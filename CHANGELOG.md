@@ -6,12 +6,26 @@ version tags (`v1`, `v1.0.0`, …).
 
 ## [Unreleased]
 ### Changed
-- Removed automatic per-lens retry from `mode: lens`. Each lens now runs
-  exactly once; if the model posts an empty/malformed (non-`## <Lens>`) review,
-  the lens job fails loudly and attributably so a human re-runs it. The double
-  retry (up to 3 model calls per lens per trigger) was burning provider tokens
-  under concurrent load with little reliability benefit. End users who want
-  retry can add it in their caller workflow.
+- **Decoupled review posting from the agent.** `mode: lens` no longer has the
+  agent call `create_pull_request_review` itself. The agent now emits its
+  findings as a JSON object in its final message (`steps.pi.outputs.response`);
+  the action parses/validates that JSON, renders the `## <Lens>` review body, and
+  posts the PR review deterministically via Octokit (`pulls.createReview`). This
+  eliminates the flake class where the model botched the review-posting tool call
+  under concurrent load (observed: ~2/7 lenses per run failed to post, different
+  lenses each time).
+- Removed `create_pull_request_review` from the default `loaded_tools`. The
+  lens agent is now strictly read-only (`get_pr_diff`, `get_issue_or_pr_thread`)
+  — it cannot post reviews, run shell, write files, or reach secrets. Tighter
+  security boundary (OWASP LLM01).
+- Removed automatic per-lens retry from `mode: lens`. Each lens runs exactly
+  once; a flaky/empty/malformed model output fails the lens job loudly and
+  attributably so a human re-runs it. The agent no longer needs retries to post,
+  since posting is deterministic. End users who want retry can add it in their
+  caller workflow.
+- Restored parallel lens execution (the `max-parallel: 1` interim measure is
+  no longer needed now that posting doesn't depend on the model).
+- Lens personas updated to emit JSON findings instead of review-body prose.
 
 ## [1.3.1] — 2026-08-15
 

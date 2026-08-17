@@ -39,4 +39,4 @@ prefixed with severity:
 - Report ONLY genuinely unhandled paths — if a caller catches it, it's handled.
 - Read the actual codebase to verify; don't assume from the diff alone.
 - Do NOT report intentionally unhandled paths (explicit `pass`, `# pragma: no cover`) or issues in code that wasn't changed.
-- Map `[CRASH]`/`[DATA]` to **MUST FIX**, `[WRONG]`/`[DEGRADED]` to **SHOULD FIX** in the output envelope below.
+- Map `[CRASH]`/`[DATA]` to **MUST FIX**, `[WRONG]`/`[DEGRADED]` to **SHOULD FIX** in each finding's `severity` field (JSON shape in shared-instructions.md).

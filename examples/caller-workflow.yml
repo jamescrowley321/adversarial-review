@@ -91,15 +91,12 @@ jobs:
     name: ${{ matrix.name }}
     needs: [config, preflight]
     runs-on: ubuntu-latest
-    # Verbose security lenses (Viper's 3-stage analysis, the OWASP lenses) can run
-    # 6-8 min on a large diff — give them headroom so they aren't cut off mid-review.
-    # Lenses run ONE AT A TIME (max-parallel: 1): the model flakes on tool calls
-    # under parallel pressure. Slower but reliable; drop this once review posting
-    # is decoupled from the agent (see docs).
+    # Lenses run in PARALLEL (one job per lens). The agent never posts the review
+    # itself — it emits findings as JSON and the action posts via Octokit
+    # deterministically — so concurrent-load tool-call flakes are no longer a risk.
     timeout-minutes: 10
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix: ${{ fromJSON(needs.config.outputs.matrix) }}
     steps:
       - name: ${{ matrix.name }}
