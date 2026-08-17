@@ -26,6 +26,17 @@ version tags (`v1`, `v1.0.0`, …).
 - Restored parallel lens execution (the `max-parallel: 1` interim measure is
   no longer needed now that posting doesn't depend on the model).
 - Lens personas updated to emit JSON findings instead of review-body prose.
+- **Severity is now grounded in what the lens can actually see.** Added a
+  Grounding rule to `lenses/shared-instructions.md`: a lens may not raise
+  **MUST FIX**/**SHOULD FIX** on a concern that rests on code outside the diff
+  (a workflow/job `name:`, an `if:`/fork guard in an unchanged hunk, whether a
+  pinned SHA is malicious, whether an external model slug exists) — those become
+  a single **NITPICK** verification request or are omitted. The gate counts the
+  severity, not the "cannot confirm" caveat, so hedged-but-blocking findings
+  were failing merges on unverifiable speculation (observed: 3 false MUST
+  FIX/SHOULD FIX on one CI-only PR, each provably wrong). Genuine conflicts
+  between two visible sources (diff vs. fetched PR description) and prompt-
+  injection carve-outs remain MUST FIX.
 
 ## [1.3.1] — 2026-08-15
 
