@@ -35,12 +35,13 @@ jobs:
             sentinel
             viper
             compliance
+            owasp-web
             owasp-llm
         run: |
           const NAMES = {
             blind: "Blind Hunter", "edge-case": "Edge Case Hunter",
             acceptance: "Acceptance Auditor", sentinel: "Sentinel", viper: "Viper",
-            compliance: "Compliance", "owasp-web": "OWASP Web Top 10",
+            compliance: "Compliance Auditor", "owasp-web": "OWASP Web Top 10",
             "owasp-llm": "OWASP LLM Top 10",
           };
           const keys = (process.env.ENABLED || "").split("\n")
@@ -54,12 +55,20 @@ jobs:
     name: ${{ matrix.name }}
     needs: config
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Lenses run in PARALLEL (one job per lens). The agent never posts the review
+    # itself — it emits findings as JSON and the action posts via Octokit
+    # deterministically — so concurrent-load tool-call flakes are no longer a risk.
+    timeout-minutes: 10
     if: >-
       github.event.pull_request.head.repo.fork == false &&
       github.actor != 'dependabot[bot]'
     strategy:
       fail-fast: false
+      # Cap concurrency at 2 to avoid OpenRouter 429s (8 parallel Opus calls
+      # rate-limited on the test run). Lenses post deterministically now, so
+      # parallelism is safe; this just eases provider pressure. Drop to unset
+      # (full parallel) if your provider/key tolerates it.
+      max-parallel: 2
       matrix: ${{ fromJSON(needs.config.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -70,6 +79,9 @@ jobs:
           lens: ${{ matrix.lens }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          # TESTING JSON-adherence with a stronger instruction-following model.
+          # GLM-5.2 emitted prose instead of JSON on ~6/8 lenses per run.
+          model: anthropic/claude-opus-5
 
   gate:
     name: Merge Gate

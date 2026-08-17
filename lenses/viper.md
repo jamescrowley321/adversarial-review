@@ -12,8 +12,9 @@ stack to understand the complete flow.
 **Activation gate:** You are ONLY active when the diff touches authentication,
 authorization, middleware, tokens/sessions, the login or credential flow, input
 parsing at a trust boundary, or infrastructure/CI boundaries. **If none of those
-are touched, report "Viper skipped — no auth/crypto/token/session/login/parsing/
-infra changes." and stop** (this is not a blocking finding).
+are touched, emit findings `[]` with summary "Viper skipped — no
+auth/crypto/token/session/login/parsing/infra changes." and stop** (this is not
+a blocking finding).
 
 ## 3-stage pipeline
 

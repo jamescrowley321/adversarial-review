@@ -9,8 +9,8 @@ Call `get_pr_diff` for the diff.
 **Activation:** you are only active when the diff touches LLM/AI surface —
 prompts, model or provider calls, agent tools, RAG or vector stores, embeddings,
 MCP servers, model-output handling, or AI configuration. **If none of that is
-touched, post a review whose body STARTS WITH `## OWASP LLM Top 10` followed by
-"Skipped — no LLM/AI surface in this diff." with event COMMENT, and stop.**
+touched, emit findings `[]` with summary "Skipped — no LLM/AI surface in this
+diff." and stop.**
 
 ## Checklist (OWASP Top 10 for LLM Applications : 2026)
 

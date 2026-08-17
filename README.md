@@ -50,13 +50,22 @@ merge is blocked until the MUST FIX findings are resolved.
   then a `mode: gate` job that `needs:` them.
 - Each lens job composes its persona + a shared output contract, runs the
   [pi coding agent](https://pi.dev) (via `shaftoe/pi-coding-agent-action`) routed
-  through OpenRouter, and the agent posts a `## <Lens>` PR review.
-- **Flake handling:** each lens verifies its own review actually landed on the
-  head commit, retries once, then **fails loudly and attributably** — so a
-  re-run targets the one flaky lens, never a silent miscount.
+  through OpenRouter, and the agent **emits its findings as JSON** in its final
+  message. The action parses that JSON, renders the `## <Lens>` review body, and
+  **posts the PR review deterministically via Octokit** — the agent never calls
+  the GitHub write API. This decoupling eliminates the flake class where the
+  model botched the review-posting tool call under concurrent load.
+- **Flake handling:** if the agent's JSON is missing/malformed (or the agent
+  produced no output), the lens job **fails loudly and attributably** so a
+  re-run targets the one flaky lens, never a silent miscount. There is **no
+  automatic retry** (each lens runs once); end users can wire their own retry.
 - **The gate** counts only well-formed reviews on the head SHA, keeps the latest
   per lens (so a stale `CHANGES_REQUESTED` from an earlier attempt can't block a
   clean re-run), and **fails closed** if any lens is missing or requested changes.
+- **Security:** the lens agent's tool allowlist is **read-only** (`get_pr_diff`,
+  `get_issue_or_pr_thread`) — it cannot post reviews, run shell, write files, or
+  reach secrets. A successful prompt injection can't exfiltrate the provider key
+  or mutate the repo.
 
 ## Inputs
 
