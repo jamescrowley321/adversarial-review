@@ -74,6 +74,9 @@ jobs:
           lens: ${{ matrix.lens }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          # TESTING JSON-adherence with a stronger instruction-following model.
+          # GLM-5.2 emitted prose instead of JSON on ~6/8 lenses per run.
+          model: anthropic/claude-opus-5
 
   gate:
     name: Merge Gate
