@@ -67,5 +67,33 @@ rejected ("at least one inline comment is required"). If
 `create_pull_request_review` fails twice in a row, STOP retrying — print your
 findings as your final message and stop. Do not loop.
 
+### Worked example (copy this shape exactly)
+
+Suppose `get_pr_diff` returned a diff whose first changed file is
+`src/api.ts` and the first `+`/`-` line is line `42`. Call the tool like this:
+
+```
+create_pull_request_review({
+  owner: "<owner from the context line>",
+  repo: "<repo from the context line>",
+  pull_number: <number from the context line>,
+  body: "## <Lens Name>\n- [SHOULD FIX] `src/api.ts:42` — <what's wrong>.\n- No other findings.",
+  event: "COMMENT",
+  comments: [
+    { path: "src/api.ts", line: 42, body: "See the review summary." }
+  ]
+})
+```
+
+Key points the flaky runs got wrong — don't repeat them:
+- `comments` MUST be a non-empty array, and every entry's `path` + `line` MUST
+  come from the diff you actually fetched (a line that exists in a hunk). Do not
+  invent a path or line. Use the first changed line of the first changed file if
+  you have no specific finding to anchor.
+- Findings go in `body` (the `## <Lens Name>` summary), NOT in the inline
+  comment. The inline comment is just a schema-required anchor.
+- `body` MUST start with `## <Lens Name>` and MUST NOT be empty or the word
+  `null`.
+
 Keep it concise. Do not repeat the diff. Do not write findings to files — post
 them as the PR review.
