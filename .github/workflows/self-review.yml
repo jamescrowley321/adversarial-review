@@ -58,7 +58,7 @@ jobs:
     # Lenses run ONE AT A TIME (max-parallel: 1) to avoid concurrent-load flakes
     # on the model (GLM-5.2 drops tool calls under parallel pressure). Slower but
     # reliable; re-enable parallelism once posting is decoupled from the agent.
-    timeout-minutes: 5
+    timeout-minutes: 10
     if: >-
       github.event.pull_request.head.repo.fork == false &&
       github.actor != 'dependabot[bot]'
