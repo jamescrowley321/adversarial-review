@@ -8,8 +8,8 @@ version tags (`v1`, `v1.0.0`, …), and consumers pin `@v1` (it tracks the lates
 Releases are automated with [release-please](https://github.com/googleapis/release-please):
 each `## [x.y.z]` section below is drafted from the Conventional Commits since the
 previous release and can be curated in the release PR before it is merged. See
-[CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. Sections at and
-above `[1.4.1]` predate the automation and were hand-written.
+[CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. `[1.4.1]` and
+the older sections below it predate the automation and were written by hand.
 
 ## [1.4.1] — 2026-08-17
 

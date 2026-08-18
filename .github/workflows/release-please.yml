@@ -44,34 +44,40 @@ jobs:
           manifest-file: .release-please-manifest.json
 
       # Consumers pin `@v1`; keep it tracking the latest v1.x.x. Runs only when
-      # release-please actually cut a release. `tag_name` is the root-component
-      # output (unprefixed, path "."). Passed via env — never interpolated into
-      # the script body — so a crafted tag can't inject into the JS.
+      # release-please actually cut a release. `tag_name` and `sha` are
+      # root-component outputs (unprefixed, path "."); `sha` is the exact commit
+      # the release was tagged at, so we move the major ref to it directly — no
+      # getCommit read to hit the ref-eventual-consistency window. Values are
+      # passed via env, never interpolated into the script body, so a crafted
+      # tag can't inject into the JS.
       - name: Advance the major tag
         if: ${{ steps.release.outputs.release_created == 'true' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
         with:
           script: |
-            const tag = process.env.RELEASE_TAG;
-            const m = tag.match(/^v(\d+)\.\d+\.\d+/);
-            if (!m) {
-              core.info(`Release tag "${tag}" is not vMAJOR.MINOR.PATCH — nothing to do.`);
+            const tag = process.env.RELEASE_TAG || "";
+            const sha = process.env.RELEASE_SHA || "";
+            // Only STABLE vMAJOR.MINOR.PATCH releases move the major tag. Anchored
+            // at the end ($) so a prerelease (e.g. v1.5.0-rc.1) never force-moves a
+            // stable `vX` ref onto unreleased code that `@vX` consumers would run.
+            const m = tag.match(/^v(\d+)\.\d+\.\d+$/);
+            if (!m || !sha) {
+              core.info(`Release "${tag || "(none)"}" @ "${sha || "(none)"}" is not a stable vMAJOR.MINOR.PATCH release — leaving the major tag unchanged.`);
               return;
             }
             const major = `v${m[1]}`;
-            const { data: commit } = await github.rest.repos.getCommit({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: tag,
-            });
-            const sha = commit.sha;
             const ref = `tags/${major}`;
             try {
               await github.rest.git.updateRef({ owner: context.repo.owner, repo: context.repo.repo, ref, sha, force: true });
               core.info(`Moved ${major} -> ${sha.slice(0, 12)}`);
-            } catch {
+            } catch (err) {
+              // Only "ref does not exist yet" (first release of a new major) falls
+              // back to createRef. A 403 (org token/ref policy), 5xx, or rate limit
+              // must surface, not be masked by a misleading "already exists".
+              if (err.status !== 404 && err.status !== 422) throw err;
               await github.rest.git.createRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `refs/${ref}`, sha });
               core.info(`Created ${major} -> ${sha.slice(0, 12)}`);
             }
