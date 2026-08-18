@@ -11,6 +11,13 @@ previous release and can be curated in the release PR before it is merged. See
 [CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. `[1.4.1]` and
 the older sections below it predate the automation and were written by hand.
 
+## [1.5.0](https://github.com/jamescrowley321/adversarial-review/compare/v1.4.1...v1.5.0) (2026-08-18)
+
+
+### Features
+
+* **lens:** auto-dismiss superseded reviews + budget-cap spend controls (no approval gate) ([#10](https://github.com/jamescrowley321/adversarial-review/issues/10)) ([af87a1b](https://github.com/jamescrowley321/adversarial-review/commit/af87a1b483b10470c4ef2d1910a8bf9680b3d7c5))
+
 ## [1.4.1] — 2026-08-17
 
 ### Changed
