@@ -77,6 +77,10 @@ inputs:
     description: "PR number to review. Defaults to the triggering pull_request."
     required: false
     default: ''
+  dismiss_superseded:
+    description: "mode=lens: when true (default), once the new review lands the lens dismisses its OWN prior reviews from earlier commits and collapses their inline comments as OUTDATED, so re-runs on new pushes do not pile up stale noise. Set to false to keep every historical review. Best-effort and cosmetic; needs pull-requests write (already required to post)."
+    required: false
+    default: 'true'
   required_checks:
     description: "mode=preflight: comma-separated check-run names that must PASS before the review runs (e.g. lint, typecheck, docker, secret-scan). Preflight waits for them and fails if any fails, so the paid lenses never run on a PR that fails the cheap deterministic gates. List only checks that run on every PR."
     required: false
@@ -222,6 +226,7 @@ runs:
         PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
         AGENT_RESPONSE: ${{ steps.pi.outputs.response }}
         AGENT_SUCCESS: ${{ steps.pi.outputs.success }}
+        DISMISS_SUPERSEDED: ${{ inputs.dismiss_superseded }}
       with:
         script: |
           const fs = require("fs");
@@ -396,6 +401,65 @@ runs:
           core.info(`"${header}" review on ${headSha.slice(0, 12)}: ${ok}`);
           if (!ok) {
             core.setFailed(`Lens "${lensName}" posted a review but it did not land on the head SHA. Re-run this job to retry.`);
+          }
+
+          // ── 7. Reconcile: once the new review has landed, dismiss THIS lens's
+          //    superseded reviews (from earlier commits) and collapse their inline
+          //    comments as OUTDATED, so re-runs on new pushes don't pile up stale
+          //    noise. Best-effort and cosmetic — a failure here never fails the
+          //    lens, and the gate already scopes adjudication to the head SHA.
+          //    Each lens only touches its OWN `## <Lens>` reviews (header match),
+          //    so lenses running in parallel never collide. ──
+          const dismissOn = String(process.env.DISMISS_SUPERSEDED || "true").toLowerCase() !== "false";
+          if (ok && dismissOn) {
+            try {
+              const superseded = reviews.filter(
+                (r) =>
+                  isBot(r) &&
+                  (r.body || "").trim().startsWith(header) &&
+                  r.commit_id &&
+                  r.commit_id !== headSha &&
+                  r.state !== "DISMISSED" &&
+                  r.id !== review.data.id,
+              );
+              let dismissed = 0;
+              for (const r of superseded) {
+                // Only CHANGES_REQUESTED / APPROVED reviews can be dismissed; a
+                // COMMENTED review can't be, but its comments are collapsed below.
+                if (r.state !== "CHANGES_REQUESTED" && r.state !== "APPROVED") continue;
+                try {
+                  await github.rest.pulls.dismissReview({
+                    owner, repo, pull_number: prNumber, review_id: r.id,
+                    message: `Superseded by the ${lensName} review on ${headSha.slice(0, 7)}.`,
+                  });
+                  dismissed++;
+                } catch (e) {
+                  core.info(`  could not dismiss review ${r.id}: ${e.message}`);
+                }
+              }
+              let minimized = 0;
+              if (superseded.length) {
+                const supIds = new Set(superseded.map((r) => r.id));
+                const allComments = await github.paginate(github.rest.pulls.listReviewComments, {
+                  owner, repo, pull_number: prNumber, per_page: 100,
+                });
+                for (const c of allComments) {
+                  if (!supIds.has(c.pull_request_review_id)) continue;
+                  try {
+                    await github.graphql(
+                      "mutation($id: ID!) { minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) { minimizedComment { isMinimized } } }",
+                      { id: c.node_id },
+                    );
+                    minimized++;
+                  } catch (e) {
+                    // Already minimized, or the token lacks the scope — non-fatal.
+                  }
+                }
+                core.info(`Reconciled ${superseded.length} superseded "${lensName}" review(s): dismissed ${dismissed}, collapsed ${minimized} comment(s).`);
+              }
+            } catch (e) {
+              core.warning(`Reconcile step failed (non-fatal): ${e.message}`);
+            }
           }
 
     - name: Upload review session

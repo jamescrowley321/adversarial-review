@@ -55,6 +55,12 @@ jobs:
     name: ${{ matrix.name }}
     needs: config
     runs-on: ubuntu-latest
+    # Spend gate: this is the only job that uses OPENROUTER_API_KEY. It runs in the
+    # `llm-review` environment, which has a required reviewer — so the paid lenses
+    # (and the key) don't unlock until a maintainer approves the run. Because
+    # `uses: ./` executes the PR's checked-out action code with the key injected, a
+    # same-repo PR is otherwise a spend/exfil path; the approval gate closes it.
+    environment: llm-review
     # Lenses run in PARALLEL (one job per lens). The agent never posts the review
     # itself — it emits findings as JSON and the action posts via Octokit
     # deterministically — so concurrent-load tool-call flakes are no longer a risk.

@@ -83,6 +83,7 @@ merge is blocked until the MUST FIX findings are resolved.
 | `diff_max_bytes` | `204800` | Diff truncation guard |
 | `diff_ignore_patterns` | lockfiles, build output, vendored code | Space-separated globs |
 | `pr_number` | triggering PR | Override for manual runs |
+| `dismiss_superseded` | `true` | On re-run, dismiss this lens's prior reviews from earlier commits + collapse their comments as OUTDATED (keeps re-pushed PRs quiet) |
 
 ### Toggling lenses
 
@@ -166,6 +167,9 @@ to pin exactly. Releases are cut with [release-please]; see
   defense).
 - **OpenSSF Scorecard:** pin the action to a commit SHA (not a tag) and keep the
   caller's `permissions:` minimal, as the example does.
+- **Protect your key.** Because the review job runs with your provider key, budget-
+  cap a dedicated key and gate the job behind an approval environment — see
+  [SECURITY.md → protecting your provider key](SECURITY.md#hardening-protecting-your-provider-key).
 
 ## Local mode (pre-CI)
 
