@@ -65,12 +65,22 @@ already close the main abuse paths; the rest is your repo/provider configuration
   monthly spend cap, and — if the provider supports it — a model allowlist and a
   rate limit. This bounds the blast radius even if every other control fails.
   Rotate the key if it is ever exposed.
-- **Gate the key behind an approval environment.** Because `uses: <this action>`
-  runs the PR's checked-out code with the key injected, a same-repo PR (from a
-  collaborator or a compromised account) is a spend/exfil path. Put the key's job
-  in a GitHub **Environment** with a **required reviewer** (`environment: <name>`
-  on the review job), so the key only unlocks after a human approves the run. This
-  repo's own self-review uses an `llm-review` environment.
+- **Gate the key behind an approval environment** — but know its limits. A GitHub
+  **Environment** with a **required reviewer** (referenced by the key-using job)
+  makes spend wait for a human, which gates **accidental/automated spend** and
+  gives an approval checkpoint. It does **not**, by itself, stop a malicious or
+  compromised **collaborator**: with `on: pull_request` (not
+  `pull_request_target`), a same-repo PR runs the workflow *as edited by its own
+  commits*, so a collaborator can drop the gate's `needs:`/`environment:` wiring
+  and add a key-exfil step in the same PR — the gate lives in the file they
+  control. To actually close that path, make the key an **environment-scoped
+  secret** AND have **every** key-using job reference the environment (so the
+  secret is unreadable without tripping the gate — this reintroduces an approval
+  per parallel wave), plus branch protection / CODEOWNERS on
+  `.github/workflows/**`. For a solo or trusted-collaborator repo, the
+  budget-capped key above is the real backstop for the collaborator threat; this
+  repo's self-review uses an `llm-review` environment for the accidental-spend +
+  fork paths only.
 - **Bound per-run cost.** `diff_max_lines` / `diff_max_bytes` cap tokens per
   review, `diff_ignore_patterns` skips lockfiles and build output, and a
   `timeout-minutes` on the review job plus `concurrency: cancel-in-progress` cap

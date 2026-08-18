@@ -422,40 +422,52 @@ runs:
                   r.state !== "DISMISSED" &&
                   r.id !== review.data.id,
               );
-              let dismissed = 0;
-              for (const r of superseded) {
-                // Only CHANGES_REQUESTED / APPROVED reviews can be dismissed; a
-                // COMMENTED review can't be, but its comments are collapsed below.
-                if (r.state !== "CHANGES_REQUESTED" && r.state !== "APPROVED") continue;
-                try {
-                  await github.rest.pulls.dismissReview({
-                    owner, repo, pull_number: prNumber, review_id: r.id,
-                    message: `Superseded by the ${lensName} review on ${headSha.slice(0, 7)}.`,
-                  });
-                  dismissed++;
-                } catch (e) {
-                  core.info(`  could not dismiss review ${r.id}: ${e.message}`);
-                }
-              }
-              let minimized = 0;
+              let dismissed = 0, minimized = 0;
               if (superseded.length) {
                 const supIds = new Set(superseded.map((r) => r.id));
                 const allComments = await github.paginate(github.rest.pulls.listReviewComments, {
                   owner, repo, pull_number: prNumber, per_page: 100,
                 });
+                const byReview = new Map();
                 for (const c of allComments) {
                   if (!supIds.has(c.pull_request_review_id)) continue;
-                  try {
-                    await github.graphql(
-                      "mutation($id: ID!) { minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) { minimizedComment { isMinimized } } }",
-                      { id: c.node_id },
-                    );
-                    minimized++;
-                  } catch (e) {
-                    // Already minimized, or the token lacks the scope — non-fatal.
+                  (byReview.get(c.pull_request_review_id) || byReview.set(c.pull_request_review_id, []).get(c.pull_request_review_id)).push(c);
+                }
+                for (const r of superseded) {
+                  // Collapse this review's inline comments FIRST, and dismiss it only
+                  // if EVERY comment collapsed. Dismissing first is non-atomic: if a
+                  // later minimize fails, the review is already DISMISSED and the
+                  // `superseded` filter excludes it forever, stranding its remaining
+                  // comments with no retry path. Minimize-first + dismiss-only-if-all
+                  // makes a partial failure self-heal — the review stays
+                  // CHANGES_REQUESTED and is retried on the next run.
+                  let allCollapsed = true;
+                  for (const c of (byReview.get(r.id) || [])) {
+                    try {
+                      await github.graphql(
+                        "mutation($id: ID!) { minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) { minimizedComment { isMinimized } } }",
+                        { id: c.node_id },
+                      );
+                      minimized++;
+                    } catch (e) {
+                      allCollapsed = false; // rate limit / perms — leave un-dismissed so next run retries
+                    }
+                  }
+                  // dismissReview applies only to CHANGES_REQUESTED / APPROVED; a
+                  // COMMENTED review can't be dismissed (its comments are collapsed above).
+                  if (allCollapsed && (r.state === "CHANGES_REQUESTED" || r.state === "APPROVED")) {
+                    try {
+                      await github.rest.pulls.dismissReview({
+                        owner, repo, pull_number: prNumber, review_id: r.id,
+                        message: `Superseded by the ${lensName} review on ${headSha.slice(0, 7)}.`,
+                      });
+                      dismissed++;
+                    } catch (e) {
+                      core.info(`  could not dismiss review ${r.id}: ${e.message}`);
+                    }
                   }
                 }
-                core.info(`Reconciled ${superseded.length} superseded "${lensName}" review(s): dismissed ${dismissed}, collapsed ${minimized} comment(s).`);
+                core.info(`Reconciled ${superseded.length} superseded "${lensName}" review(s): collapsed ${minimized} comment(s), dismissed ${dismissed}.`);
               }
             } catch (e) {
               core.warning(`Reconcile step failed (non-fatal): ${e.message}`);

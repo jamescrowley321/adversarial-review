@@ -97,13 +97,18 @@ jobs:
 
   # Spend gate: ONE approval checkpoint that carries the `llm-review` environment
   # (required reviewer). The paid review jobs `needs:` it, so OPENROUTER_API_KEY
-  # isn't spent until a maintainer approves the run — a single approval per run,
-  # even though lenses run as a capped-parallel matrix (putting `environment:` on
-  # the matrix itself prompts once per max-parallel wave). Because `uses: ./` runs
-  # the PR's checked-out code with the key injected, a same-repo PR is otherwise a
-  # spend/exfil path; this gate closes it. For untrusted collaborators, also scope
-  # OPENROUTER_API_KEY to the environment so a workflow edit that drops this gate
-  # still can't read the key.
+  # isn't spent until a maintainer approves the run — a single approval per run.
+  #
+  # SCOPE OF PROTECTION — read carefully. This gates accidental/automated spend and
+  # the fork path (fork PRs get no secret anyway). It does NOT stop a malicious or
+  # compromised collaborator: this workflow triggers on `pull_request` (not
+  # `pull_request_target`), so a same-repo PR runs the workflow AS EDITED BY ITS OWN
+  # COMMITS — a collaborator can delete `needs: approve` and add a key-exfil step in
+  # the same PR, and the gate (defined in this same file) is never reached. Closing
+  # THAT requires making the secret an environment-scoped secret AND having every
+  # key-using job reference the environment (which reintroduces per-wave approval),
+  # plus branch protection / CODEOWNERS on `.github/workflows/**`. For this repo the
+  # budget-capped key (SECURITY.md) is the real backstop for that threat.
   approve:
     name: Approve LLM spend
     needs: config
