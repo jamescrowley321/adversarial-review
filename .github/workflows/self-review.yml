@@ -51,16 +51,30 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include })}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `csv=${keys.join(",")}\n`);
 
-  review:
-    name: ${{ matrix.name }}
+  # Spend gate: ONE approval checkpoint that carries the `llm-review` environment
+  # (required reviewer). The paid review jobs `needs:` it, so OPENROUTER_API_KEY
+  # isn't spent until a maintainer approves the run — a single approval per run,
+  # even though lenses run as a capped-parallel matrix (putting `environment:` on
+  # the matrix itself prompts once per max-parallel wave). Because `uses: ./` runs
+  # the PR's checked-out code with the key injected, a same-repo PR is otherwise a
+  # spend/exfil path; this gate closes it. For untrusted collaborators, also scope
+  # OPENROUTER_API_KEY to the environment so a workflow edit that drops this gate
+  # still can't read the key.
+  approve:
+    name: Approve LLM spend
     needs: config
     runs-on: ubuntu-latest
-    # Spend gate: this is the only job that uses OPENROUTER_API_KEY. It runs in the
-    # `llm-review` environment, which has a required reviewer — so the paid lenses
-    # (and the key) don't unlock until a maintainer approves the run. Because
-    # `uses: ./` executes the PR's checked-out action code with the key injected, a
-    # same-repo PR is otherwise a spend/exfil path; the approval gate closes it.
     environment: llm-review
+    if: >-
+      github.event.pull_request.head.repo.fork == false &&
+      github.actor != 'dependabot[bot]'
+    steps:
+      - run: echo "Approved — lenses may spend the provider key."
+
+  review:
+    name: ${{ matrix.name }}
+    needs: [config, approve]
+    runs-on: ubuntu-latest
     # Lenses run in PARALLEL (one job per lens). The agent never posts the review
     # itself — it emits findings as JSON and the action posts via Octokit
     # deterministically — so concurrent-load tool-call flakes are no longer a risk.
@@ -70,11 +84,11 @@ jobs:
       github.actor != 'dependabot[bot]'
     strategy:
       fail-fast: false
-      # Cap concurrency at 2 to avoid OpenRouter 429s (8 parallel Opus calls
-      # rate-limited on the test run). Lenses post deterministically now, so
-      # parallelism is safe; this just eases provider pressure. Drop to unset
-      # (full parallel) if your provider/key tolerates it.
-      max-parallel: 2
+      # Full parallel: all lenses run in one wave so the whole review lands well
+      # under 10 min end-to-end. The earlier max-parallel:2 cap was for OpenRouter
+      # 429s seen with 8 concurrent *Opus* calls; Sonnet 5 (below) has more rate
+      # headroom, so the cap is no longer needed. If a lower-tier key starts
+      # 429ing, re-add `max-parallel: 4`.
       matrix: ${{ fromJSON(needs.config.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -85,9 +99,10 @@ jobs:
           lens: ${{ matrix.lens }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key: ${{ secrets.OPENROUTER_API_KEY }}
-          # TESTING JSON-adherence with a stronger instruction-following model.
-          # GLM-5.2 emitted prose instead of JSON on ~6/8 lenses per run.
-          model: anthropic/claude-opus-5
+          # Sonnet 5: strong JSON adherence (GLM-5.2 emitted prose on ~6/8 lenses;
+          # that's why we left it), near-Opus finding quality, and enough rate
+          # headroom to run all lenses in one wave — keeps the review under 10 min.
+          model: anthropic/claude-sonnet-5
 
   gate:
     name: Merge Gate
