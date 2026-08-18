@@ -9,6 +9,10 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
+# cancel-in-progress kills a *running* review when a new commit lands — but it
+# does NOT cancel a run parked in the environment-approval `waiting` state, so
+# those pile up and collide (observed: a stale waiting run cancelled a live one
+# ~57s in). The `cancel-stale` job below closes that gap explicitly.
 concurrency:
   group: self-review-${{ github.ref }}
   cancel-in-progress: true
@@ -19,6 +23,46 @@ permissions:
   checks: write
 
 jobs:
+  # Kill any older run of this workflow on this branch — including ones stuck in
+  # the approval `waiting` state that cancel-in-progress leaves behind — so a new
+  # push always supersedes the previous review cleanly. Runs in parallel; the
+  # current run proceeds while stale ones are cancelled.
+  cancel-stale:
+    name: Cancel superseded runs
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.head.repo.fork == false &&
+      github.actor != 'dependabot[bot]'
+    permissions:
+      actions: write
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner, repo,
+              workflow_id: "self-review.yml",
+              branch: context.payload.pull_request.head.ref,
+              per_page: 100,
+            });
+            const ACTIVE = new Set(["queued", "in_progress", "waiting", "pending", "requested", "action_required"]);
+            let n = 0;
+            for (const r of runs) {
+              if (r.id === context.runId) continue;
+              // Only supersede OLDER runs, so two near-simultaneous runs don't cancel each other.
+              if (r.run_number >= context.runNumber) continue;
+              if (!ACTIVE.has(r.status)) continue;
+              try {
+                await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: r.id });
+                core.info(`Cancelled superseded run #${r.run_number} (${r.id}, was ${r.status}).`);
+                n++;
+              } catch (e) {
+                core.info(`Could not cancel run ${r.id}: ${e.message}`);
+              }
+            }
+            core.info(`Superseded ${n} older run(s).`);
+
   config:
     runs-on: ubuntu-latest
     outputs:
