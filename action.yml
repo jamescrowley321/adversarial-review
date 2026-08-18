@@ -536,10 +536,13 @@ runs:
 
           const isBot = (r) =>
             r.user && (r.user.login === "github-actions[bot]" || r.user.login === "github-actions");
-          // Match by "## <Lens>" header prefix; an empty/"null" body matches nothing.
+          // Match the EXACT "## <Lens>" header line (an empty/"null" body matches
+          // nothing). Exact, not a prefix: a bare startsWith would mis-attribute a
+          // review whose lens name is a prefix of another's (e.g. "Sentinel" vs
+          // "Sentinel Plus") — same fix as the post step's `ownsReview`.
           const lensOf = (r) => {
             const first = (r.body || "").trim().split("\n")[0].trim();
-            return EXPECTED.find((l) => first.startsWith(`## ${l}`)) || null;
+            return EXPECTED.find((l) => first === `## ${l}`) || null;
           };
           const onHead = reviews.filter((r) => r.commit_id === headSha && isBot(r) && EXPECTED.includes(lensOf(r)));
 
