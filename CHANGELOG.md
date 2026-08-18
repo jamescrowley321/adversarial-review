@@ -2,9 +2,32 @@
 
 All notable changes to this project are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com); this project uses semantic
-version tags (`v1`, `v1.0.0`, …).
+version tags (`v1`, `v1.0.0`, …), and consumers pin `@v1` (it tracks the latest
+`v1.x.x`).
 
-## [Unreleased]
+Releases are automated with [release-please](https://github.com/googleapis/release-please):
+each `## [x.y.z]` section below is drafted from the Conventional Commits since the
+previous release and can be curated in the release PR before it is merged. See
+[CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. Sections at and
+above `[1.4.1]` predate the automation and were hand-written.
+
+## [1.4.1] — 2026-08-17
+
+### Changed
+- **Severity is now grounded in what the lens can actually see.** Added a
+  Grounding rule to `lenses/shared-instructions.md`: a lens may not raise
+  **MUST FIX**/**SHOULD FIX** on a concern that rests on code outside the diff
+  (a workflow/job `name:`, an `if:`/fork guard in an unchanged hunk, whether a
+  pinned SHA is malicious, whether an external model slug exists) — those become
+  a single **NITPICK** verification request or are omitted. The gate counts the
+  severity, not the "cannot confirm" caveat, so hedged-but-blocking findings
+  were failing merges on unverifiable speculation (observed: 3 false MUST
+  FIX/SHOULD FIX on one CI-only PR, each provably wrong). Genuine conflicts
+  between two visible sources (diff vs. fetched PR description) and prompt-
+  injection carve-outs remain MUST FIX.
+
+## [1.4.0] — 2026-08-17
+
 ### Changed
 - **Decoupled review posting from the agent.** `mode: lens` no longer has the
   agent call `create_pull_request_review` itself. The agent now emits its
@@ -26,17 +49,6 @@ version tags (`v1`, `v1.0.0`, …).
 - Restored parallel lens execution (the `max-parallel: 1` interim measure is
   no longer needed now that posting doesn't depend on the model).
 - Lens personas updated to emit JSON findings instead of review-body prose.
-- **Severity is now grounded in what the lens can actually see.** Added a
-  Grounding rule to `lenses/shared-instructions.md`: a lens may not raise
-  **MUST FIX**/**SHOULD FIX** on a concern that rests on code outside the diff
-  (a workflow/job `name:`, an `if:`/fork guard in an unchanged hunk, whether a
-  pinned SHA is malicious, whether an external model slug exists) — those become
-  a single **NITPICK** verification request or are omitted. The gate counts the
-  severity, not the "cannot confirm" caveat, so hedged-but-blocking findings
-  were failing merges on unverifiable speculation (observed: 3 false MUST
-  FIX/SHOULD FIX on one CI-only PR, each provably wrong). Genuine conflicts
-  between two visible sources (diff vs. fetched PR description) and prompt-
-  injection carve-outs remain MUST FIX.
 
 ## [1.3.1] — 2026-08-15
 

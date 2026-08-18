@@ -1,0 +1,77 @@
+# Automated release authoring.
+#
+# On every push to main, release-please reads the Conventional Commits since the
+# last release and maintains a "release PR" that bumps the version (SemVer) and
+# updates CHANGELOG.md. Merging that release PR publishes the vX.Y.Z GitHub
+# Release — no more hand-run `gh release create` from a maintainer's machine.
+#
+# Token-chaining, resolved (this is the whole point):
+#   A Release published with the default GITHUB_TOKEN does NOT emit a
+#   `release: published` event that can trigger a *separate* workflow — GitHub
+#   suppresses workflow-triggering-workflow for the default token. So we must NOT
+#   rely on an `on: release` workflow to move the `vX` major tag, or `@v1` would
+#   silently stop advancing. Instead, this same run — right after release-please
+#   publishes, still on the push trigger and still holding contents:write —
+#   advances the major tag itself. One token, one run, no PAT/App secret to
+#   manage. This replaces the old release.yml (its Octokit logic is folded in
+#   below).
+
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # release commits, tags, GitHub Releases, and moving the major tag
+  pull-requests: write # open / update the release PR
+
+concurrency:
+  # Serialize releases; never cancel one mid-publish.
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # Consumers pin `@v1`; keep it tracking the latest v1.x.x. Runs only when
+      # release-please actually cut a release. `tag_name` is the root-component
+      # output (unprefixed, path "."). Passed via env — never interpolated into
+      # the script body — so a crafted tag can't inject into the JS.
+      - name: Advance the major tag
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        with:
+          script: |
+            const tag = process.env.RELEASE_TAG;
+            const m = tag.match(/^v(\d+)\.\d+\.\d+/);
+            if (!m) {
+              core.info(`Release tag "${tag}" is not vMAJOR.MINOR.PATCH — nothing to do.`);
+              return;
+            }
+            const major = `v${m[1]}`;
+            const { data: commit } = await github.rest.repos.getCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: tag,
+            });
+            const sha = commit.sha;
+            const ref = `tags/${major}`;
+            try {
+              await github.rest.git.updateRef({ owner: context.repo.owner, repo: context.repo.repo, ref, sha, force: true });
+              core.info(`Moved ${major} -> ${sha.slice(0, 12)}`);
+            } catch {
+              await github.rest.git.createRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `refs/${ref}`, sha });
+              core.info(`Created ${major} -> ${sha.slice(0, 12)}`);
+            }
