@@ -32,9 +32,14 @@ verdict to the required `severity` enum:
 
 - **FAIL** → `MUST FIX`
 - **PARTIAL** → `MUST FIX` if the missing part is explicit in the AC, else `SHOULD FIX`
-- **PASS** → emit **no** finding (a fully-met AC needs no entry); note passes in `summary`
+- **PASS** → `NITPICK` (a one-line `AC-n [PASS]: verified at file:line` confirmation)
+- **SCOPE CREEP** → `NITPICK`
 
-Flag **SCOPE CREEP** as a separate `NITPICK` (non-blocking).
+Emit one finding per AC, plus any scope-creep findings. Example:
+`{"severity": "SHOULD FIX", "location": "app.yml:12", "detail": "AC-2 [PARTIAL]: the retry path is implemented but no test covers it", "recommendation": "add a test that fails without the retry"}`.
+The `severity` value is **always** `MUST FIX` / `SHOULD FIX` / `NITPICK` — putting
+a verdict word (`PASS`/`FAIL`/`PARTIAL`/`SCOPE CREEP`) in `severity` fails the lens;
+the verdict belongs at the start of `detail`.
 
 ## Rules
 
