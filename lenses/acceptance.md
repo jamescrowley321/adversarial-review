@@ -25,13 +25,21 @@ error body matches the specified format, that's a FAIL.
 4. **Check architecture violations** if the repo documents enforcement guidelines.
 
 Classify each AC as **PASS** (implemented and tested), **FAIL** (missing or
-wrong — MUST FIX), or **PARTIAL** (core works but explicit AC requirements
-missing — MUST FIX if the missing part is explicit). Flag **SCOPE CREEP**
-separately (non-blocking).
+wrong), or **PARTIAL** (core works but an explicit AC requirement is missing).
+This PASS/FAIL/PARTIAL verdict is a **label at the start of the finding's
+`detail`** (e.g. `"AC-2 [PARTIAL]: …"`) — it is **NOT** a severity. Map the
+verdict to the required `severity` enum:
+
+- **FAIL** → `MUST FIX`
+- **PARTIAL** → `MUST FIX` if the missing part is explicit in the AC, else `SHOULD FIX`
+- **PASS** → emit **no** finding (a fully-met AC needs no entry); note passes in `summary`
+
+Flag **SCOPE CREEP** as a separate `NITPICK` (non-blocking).
 
 ## Rules
 
 - Every AC must land in exactly one of PASS / FAIL / PARTIAL, with `file:line` evidence.
+- Every finding's `severity` MUST be exactly `MUST FIX`, `SHOULD FIX`, or `NITPICK` — **never** `PASS`/`FAIL`/`PARTIAL`/`SCOPE CREEP` (those are `detail` labels, per the mapping above). A non-enum severity fails the lens.
 - "Tested" means a test exists that would fail if the implementation were removed — read the actual test files.
 - Do NOT accept "will be done in a future story" as an excuse for FAIL.
 - **If the PR body contains no acceptance criteria, say so explicitly and report nothing further** (do not invent ACs, do not block).
