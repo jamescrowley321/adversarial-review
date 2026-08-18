@@ -9,10 +9,10 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
-# cancel-in-progress kills a *running* review when a new commit lands — but it
-# does NOT cancel a run parked in the environment-approval `waiting` state, so
-# those pile up and collide (observed: a stale waiting run cancelled a live one
-# ~57s in). The `cancel-stale` job below closes that gap explicitly.
+# A new push cancels the in-progress review for this branch. cancel-in-progress
+# covers the common case; the `cancel-stale` job below is a belt-and-suspenders
+# sweep for any older run left active (a queued/pending run the concurrency group
+# can race past).
 concurrency:
   group: self-review-${{ github.ref }}
   cancel-in-progress: true
@@ -23,10 +23,10 @@ permissions:
   checks: write
 
 jobs:
-  # Kill any older run of this workflow on this branch — including ones stuck in
-  # the approval `waiting` state that cancel-in-progress leaves behind — so a new
-  # push always supersedes the previous review cleanly. Runs in parallel; the
-  # current run proceeds while stale ones are cancelled.
+  # Belt-and-suspenders: explicitly cancel any older run of this workflow still
+  # active on this branch, so a new push always supersedes the previous review
+  # cleanly even if the concurrency group races past a queued/pending run. Runs
+  # in parallel; the current run proceeds while stale ones are cancelled.
   cancel-stale:
     name: Cancel superseded runs
     runs-on: ubuntu-latest
@@ -95,34 +95,15 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include })}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `csv=${keys.join(",")}\n`);
 
-  # Spend gate: ONE approval checkpoint that carries the `llm-review` environment
-  # (required reviewer). The paid review jobs `needs:` it, so OPENROUTER_API_KEY
-  # isn't spent until a maintainer approves the run — a single approval per run.
-  #
-  # SCOPE OF PROTECTION — read carefully. This gates accidental/automated spend and
-  # the fork path (fork PRs get no secret anyway). It does NOT stop a malicious or
-  # compromised collaborator: this workflow triggers on `pull_request` (not
-  # `pull_request_target`), so a same-repo PR runs the workflow AS EDITED BY ITS OWN
-  # COMMITS — a collaborator can delete `needs: approve` and add a key-exfil step in
-  # the same PR, and the gate (defined in this same file) is never reached. Closing
-  # THAT requires making the secret an environment-scoped secret AND having every
-  # key-using job reference the environment (which reintroduces per-wave approval),
-  # plus branch protection / CODEOWNERS on `.github/workflows/**`. For this repo the
-  # budget-capped key (SECURITY.md) is the real backstop for that threat.
-  approve:
-    name: Approve LLM spend
-    needs: config
-    runs-on: ubuntu-latest
-    environment: llm-review
-    if: >-
-      github.event.pull_request.head.repo.fork == false &&
-      github.actor != 'dependabot[bot]'
-    steps:
-      - run: echo "Approved — lenses may spend the provider key."
-
+  # Spend controls (no approval gate — an approval environment can't stop the
+  # same-repo threat it appears to, because `on: pull_request` runs the workflow
+  # as edited by the PR's own commits; see SECURITY.md). Spend is bounded instead
+  # by: a budget-capped OpenRouter key, fork PRs getting no secret (+ the
+  # fork/dependabot `if:` guards below), the diff caps, `timeout-minutes`, and
+  # `concurrency: cancel-in-progress` + the `cancel-stale` job.
   review:
     name: ${{ matrix.name }}
-    needs: [config, approve]
+    needs: config
     runs-on: ubuntu-latest
     # Lenses run in PARALLEL (one job per lens). The agent never posts the review
     # itself — it emits findings as JSON and the action posts via Octokit

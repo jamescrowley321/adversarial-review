@@ -167,9 +167,10 @@ to pin exactly. Releases are cut with [release-please]; see
   defense).
 - **OpenSSF Scorecard:** pin the action to a commit SHA (not a tag) and keep the
   caller's `permissions:` minimal, as the example does.
-- **Protect your key.** Because the review job runs with your provider key, budget-
-  cap a dedicated key and gate the job behind an approval environment — see
-  [SECURITY.md → protecting your provider key](SECURITY.md#hardening-protecting-your-provider-key).
+- **Protect your key.** Because the review job runs with your provider key, use a
+  budget-capped, repo-scoped key and keep secrets withheld from fork PRs — see
+  [SECURITY.md → protecting your provider key](SECURITY.md#hardening-protecting-your-provider-key)
+  (including why an approval environment does *not* close the collaborator path).
 
 ## Local mode (pre-CI)
 

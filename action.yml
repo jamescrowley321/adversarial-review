@@ -395,8 +395,14 @@ runs:
           });
           const isBot = (r) => r.user && (r.user.login === "github-actions[bot]" || r.user.login === "github-actions");
           const header = `## ${lensName}`;
+          // Exact first-line match, NOT a prefix: a bare startsWith would let a
+          // lens whose name is a textual prefix of another (e.g. "Sentinel" vs
+          // "Sentinel Plus") claim — and dismiss/collapse — the other lens's
+          // reviews and comments. Reachable through ordinary lens-name config,
+          // no attacker required.
+          const ownsReview = (r) => (r.body || "").split("\n")[0].trim() === header;
           const ok = reviews.some(
-            (r) => r.commit_id === headSha && isBot(r) && (r.body || "").trim().startsWith(header),
+            (r) => r.commit_id === headSha && isBot(r) && ownsReview(r),
           );
           core.info(`"${header}" review on ${headSha.slice(0, 12)}: ${ok}`);
           if (!ok) {
@@ -410,19 +416,34 @@ runs:
           //    lens, and the gate already scopes adjudication to the head SHA.
           //    Each lens only touches its OWN `## <Lens>` reviews (header match),
           //    so lenses running in parallel never collide. ──
-          const dismissOn = String(process.env.DISMISS_SUPERSEDED || "true").toLowerCase() !== "false";
+          // Parse the opt-out explicitly and fail CLOSED: this collapses comments
+          // and dismisses reviews, so only a clearly-truthy value enables it. A
+          // non-canonical string (e.g. "0", "no", a typo) disables + warns rather
+          // than silently enabling a destructive-ish operation.
+          const rawDismiss = String(process.env.DISMISS_SUPERSEDED ?? "true").trim().toLowerCase();
+          const TRUTHY = new Set(["true", "1", "yes", "on"]);
+          const FALSY = new Set(["false", "0", "no", "off", ""]);
+          const dismissOn = TRUTHY.has(rawDismiss);
+          if (!TRUTHY.has(rawDismiss) && !FALSY.has(rawDismiss)) {
+            core.warning(`Unrecognized dismiss_superseded value "${process.env.DISMISS_SUPERSEDED}" — treating as disabled (expected true/false).`);
+          }
           if (ok && dismissOn) {
             try {
               const superseded = reviews.filter(
                 (r) =>
                   isBot(r) &&
-                  (r.body || "").trim().startsWith(header) &&
+                  ownsReview(r) &&
                   r.commit_id &&
                   r.commit_id !== headSha &&
                   r.state !== "DISMISSED" &&
                   r.id !== review.data.id,
               );
-              let dismissed = 0, minimized = 0;
+              let dismissed = 0, minimized = 0, warnedMinimize = false;
+              // Bound total minimize calls per job: pagination + per-comment
+              // GraphQL run serially, and every parallel lens sweeps the same PR,
+              // so an old PR with many prior comments could hit GitHub's secondary
+              // rate limit or the step timeout. Leftovers are retried next run.
+              let minimizeBudget = 200;
               if (superseded.length) {
                 const supIds = new Set(superseded.map((r) => r.id));
                 const allComments = await github.paginate(github.rest.pulls.listReviewComments, {
@@ -433,6 +454,7 @@ runs:
                   if (!supIds.has(c.pull_request_review_id)) continue;
                   (byReview.get(c.pull_request_review_id) || byReview.set(c.pull_request_review_id, []).get(c.pull_request_review_id)).push(c);
                 }
+                supersededLoop:
                 for (const r of superseded) {
                   // Collapse this review's inline comments FIRST, and dismiss it only
                   // if EVERY comment collapsed. Dismissing first is non-atomic: if a
@@ -443,14 +465,24 @@ runs:
                   // CHANGES_REQUESTED and is retried on the next run.
                   let allCollapsed = true;
                   for (const c of (byReview.get(r.id) || [])) {
+                    if (minimizeBudget <= 0) {
+                      allCollapsed = false;
+                      core.warning(`Hit the minimize cap (200) reconciling "${lensName}" — leaving the rest for the next run.`);
+                      break supersededLoop;
+                    }
                     try {
                       await github.graphql(
                         "mutation($id: ID!) { minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) { minimizedComment { isMinimized } } }",
                         { id: c.node_id },
                       );
                       minimized++;
+                      minimizeBudget--;
                     } catch (e) {
                       allCollapsed = false; // rate limit / perms — leave un-dismissed so next run retries
+                      if (!warnedMinimize) {
+                        core.warning(`minimizeComment failed for a superseded "${lensName}" comment (left un-dismissed for retry): ${e.message}`);
+                        warnedMinimize = true;
+                      }
                     }
                   }
                   // dismissReview applies only to CHANGES_REQUESTED / APPROVED; a
