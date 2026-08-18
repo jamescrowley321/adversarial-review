@@ -9,6 +9,10 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
+# A new push cancels the in-progress review for this branch. cancel-in-progress
+# covers the common case; the `cancel-stale` job below is a belt-and-suspenders
+# sweep for any older run left active (a queued/pending run the concurrency group
+# can race past).
 concurrency:
   group: self-review-${{ github.ref }}
   cancel-in-progress: true
@@ -19,6 +23,46 @@ permissions:
   checks: write
 
 jobs:
+  # Belt-and-suspenders: explicitly cancel any older run of this workflow still
+  # active on this branch, so a new push always supersedes the previous review
+  # cleanly even if the concurrency group races past a queued/pending run. Runs
+  # in parallel; the current run proceeds while stale ones are cancelled.
+  cancel-stale:
+    name: Cancel superseded runs
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.head.repo.fork == false &&
+      github.actor != 'dependabot[bot]'
+    permissions:
+      actions: write
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner, repo,
+              workflow_id: "self-review.yml",
+              branch: context.payload.pull_request.head.ref,
+              per_page: 100,
+            });
+            const ACTIVE = new Set(["queued", "in_progress", "waiting", "pending", "requested", "action_required"]);
+            let n = 0;
+            for (const r of runs) {
+              if (r.id === context.runId) continue;
+              // Only supersede OLDER runs, so two near-simultaneous runs don't cancel each other.
+              if (r.run_number >= context.runNumber) continue;
+              if (!ACTIVE.has(r.status)) continue;
+              try {
+                await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: r.id });
+                core.info(`Cancelled superseded run #${r.run_number} (${r.id}, was ${r.status}).`);
+                n++;
+              } catch (e) {
+                core.info(`Could not cancel run ${r.id}: ${e.message}`);
+              }
+            }
+            core.info(`Superseded ${n} older run(s).`);
+
   config:
     runs-on: ubuntu-latest
     outputs:
@@ -51,6 +95,12 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include })}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `csv=${keys.join(",")}\n`);
 
+  # Spend controls (no approval gate — an approval environment can't stop the
+  # same-repo threat it appears to, because `on: pull_request` runs the workflow
+  # as edited by the PR's own commits; see SECURITY.md). Spend is bounded instead
+  # by: a budget-capped OpenRouter key, fork PRs getting no secret (+ the
+  # fork/dependabot `if:` guards below), the diff caps, `timeout-minutes`, and
+  # `concurrency: cancel-in-progress` + the `cancel-stale` job.
   review:
     name: ${{ matrix.name }}
     needs: config
@@ -64,11 +114,11 @@ jobs:
       github.actor != 'dependabot[bot]'
     strategy:
       fail-fast: false
-      # Cap concurrency at 2 to avoid OpenRouter 429s (8 parallel Opus calls
-      # rate-limited on the test run). Lenses post deterministically now, so
-      # parallelism is safe; this just eases provider pressure. Drop to unset
-      # (full parallel) if your provider/key tolerates it.
-      max-parallel: 2
+      # Full parallel: all lenses run in one wave so the whole review lands well
+      # under 10 min end-to-end. The earlier max-parallel:2 cap was for OpenRouter
+      # 429s seen with 8 concurrent *Opus* calls; Sonnet 5 (below) has more rate
+      # headroom, so the cap is no longer needed. If a lower-tier key starts
+      # 429ing, re-add `max-parallel: 4`.
       matrix: ${{ fromJSON(needs.config.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -79,9 +129,10 @@ jobs:
           lens: ${{ matrix.lens }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key: ${{ secrets.OPENROUTER_API_KEY }}
-          # TESTING JSON-adherence with a stronger instruction-following model.
-          # GLM-5.2 emitted prose instead of JSON on ~6/8 lenses per run.
-          model: anthropic/claude-opus-5
+          # Sonnet 5: strong JSON adherence (GLM-5.2 emitted prose on ~6/8 lenses;
+          # that's why we left it), near-Opus finding quality, and enough rate
+          # headroom to run all lenses in one wave — keeps the review under 10 min.
+          model: anthropic/claude-sonnet-5
 
   gate:
     name: Merge Gate
