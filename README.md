@@ -137,6 +137,18 @@ Because it's an agent (not a regex), it catches undisclosed AI-authored PRs and
 policy violations the same way the other lenses catch bugs. Like the other
 lenses it runs on pi and needs the provider secret, so it can't run on fork PRs.
 
+## Versioning
+
+Releases follow [SemVer]. **Pin `@v1`** — it always tracks the latest `v1.x.x`
+and is advanced automatically on every release, so you get fixes and features
+without changing your workflow; a breaking change would ship as `v2`. Prefer a
+full `vX.Y.Z` tag (or a commit SHA, which OpenSSF Scorecard rewards) if you want
+to pin exactly. Releases are cut with [release-please]; see
+[CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release).
+
+[SemVer]: https://semver.org
+[release-please]: https://github.com/googleapis/release-please
+
 ## Cost & operational notes
 
 - Every reviewed PR spends provider tokens across all matrix lenses. Control cost

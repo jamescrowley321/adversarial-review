@@ -18,7 +18,8 @@ together.
 | `scripts/run-local.mjs` | Local pre-CI runner (Node) |
 | `examples/caller-workflow.yml` | Drop-in consumer workflow |
 | `.github/adversarial-review/compliance.md` | This repo's own Compliance-lens rules |
-| `.github/workflows/` | Self-review dogfood + lint |
+| `.github/workflows/` | Self-review dogfood, lint, and release automation |
+| `release-please-config.json`, `.release-please-manifest.json`, `version.txt` | release-please config + tracked version (see [Cutting a release](#cutting-a-release)) |
 
 ## Local development
 
@@ -67,6 +68,36 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`, `perf`, `style`
 - **Fill in the AI-provenance block** in the PR description (see below).
 - Expect this action's own five lenses to review your PR. Resolve **MUST FIX**
   findings before merge.
+
+## Cutting a release
+
+Releases are automated with [release-please]. You do **not** run `gh release
+create` by hand — cutting a release *is* merging the release PR.
+
+1. **Land changes on `main`** as usual, with [Conventional Commit] messages.
+   The commit *type* decides the SemVer bump: `feat:` → minor, `fix:` / `perf:`
+   → patch, and a `!` or a `BREAKING CHANGE:` footer → major. `docs:`, `chore:`,
+   `ci:`, `refactor:`, `test:`, and `style:` do **not** cut a release on their
+   own — so use `feat:`/`fix:` for anything a consumer should get a new tag for.
+2. **release-please opens a release PR** (titled `chore(main): release x.y.z`)
+   and keeps it up to date as more commits land. It bumps `version.txt` and
+   `.release-please-manifest.json` and prepends a `CHANGELOG.md` section drafted
+   from the commits. This PR is the human decision point — curate the changelog
+   wording in it if you want, then approve it like any other PR.
+3. **Merge the release PR.** On merge, the `Release Please` workflow publishes
+   the `vX.Y.Z` GitHub Release **and**, in the same run, advances the `vX` major
+   tag (e.g. `v1`) to the released commit — so consumers pinned to `@v1` pick it
+   up automatically. No PAT, GitHub App, or manual tag move is involved.
+
+Why the major-tag move lives in the same workflow: a Release published with the
+default `GITHUB_TOKEN` can't trigger a *separate* `on: release` workflow, so a
+standalone tag-mover would silently stop `@v1` from advancing. Folding it into
+the release-please run avoids that (and avoids managing a token). If you ever
+must publish out-of-band, move the tag yourself:
+`git tag -f v1 <released-sha> && git push -f origin v1`.
+
+[release-please]: https://github.com/googleapis/release-please
+[Conventional Commit]: https://www.conventionalcommits.org/
 
 ## AI-Assisted Contributions
 
