@@ -67,3 +67,6 @@ jobs:
 
       - name: Validate the example workflow's models_config against the allowlist
         run: node scripts/check-example.mjs
+
+      - name: Validate the example workflow parses as YAML
+        run: npx --yes js-yaml@4 examples/caller-workflow.yml > /dev/null
