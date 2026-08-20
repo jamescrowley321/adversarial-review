@@ -6,7 +6,13 @@
 import { readFileSync } from "node:fs";
 import { validateModelsConfig } from "./models-config.mjs";
 
-const example = readFileSync("examples/caller-workflow.yml", "utf8");
+let example;
+try {
+  example = readFileSync("examples/caller-workflow.yml", "utf8");
+} catch (e) {
+  console.log(`::error::could not read examples/caller-workflow.yml: ${e.message}`);
+  process.exit(1);
+}
 if (!example.trim()) {
   console.log("::error::examples/caller-workflow.yml is empty");
   process.exit(1);

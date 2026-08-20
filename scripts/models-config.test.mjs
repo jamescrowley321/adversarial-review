@@ -112,34 +112,78 @@ test("non-allowlist routing key is rejected", () => {
   assert.throws(() => validateModelsConfig(bad), /rejected routing key/);
 });
 
-test("wrong type on zdr is rejected", () => {
+test("wrong type on zdr is rejected (null)", () => {
   const bad = JSON.stringify({
     providers: {
       openrouter: {
         modelOverrides: {
           "anthropic/claude-sonnet-5": {
-            compat: { openRouterRouting: { zdr: "yes" } },
+            compat: { openRouterRouting: { zdr: null } },
           },
         },
       },
     },
   });
-  assert.throws(() => validateModelsConfig(bad), /zdr must be a boolean/);
+  assert.throws(() => validateModelsConfig(bad), /zdr must be/);
 });
 
-test("non-string-array quantizations is rejected", () => {
-  const bad = JSON.stringify({
+test("non-string-array quantizations is accepted (routing values are pass-through)", () => {
+  // Routing-preference values are sent as-is to OpenRouter; the security boundary
+  // is the KEY allowlist + blocking endpoint fields, not element-level type checks.
+  const cfg = JSON.stringify({
     providers: {
       openrouter: {
         modelOverrides: {
-          "anthropic/claude-sonnet-5": {
-            compat: { openRouterRouting: { quantizations: ["fp8", 8] } },
-          },
+          "m/x": { compat: { openRouterRouting: { quantizations: ["fp8", "bf16"] } } },
         },
       },
     },
   });
-  assert.throws(() => validateModelsConfig(bad), /quantizations must be an array of strings/);
+  validateModelsConfig(cfg); // passes
+});
+
+test("prototype-polluting provider name '__proto__' is rejected loudly", () => {
+  // Raw JSON string: a JS object literal would set __proto__ as the prototype,
+  // not an own property, so JSON.stringify would drop it. Build the string directly.
+  const bad = '{"providers":{"__proto__":{"modelOverrides":{"m/x":{"compat":{"openRouterRouting":{"zdr":true}}}}}}}';
+  assert.throws(() => validateModelsConfig(bad), /rejected reserved key '__proto__'.*providers\.<provider>/);
+});
+
+test("prototype-polluting model id '__proto__' is rejected loudly", () => {
+  const bad = '{"providers":{"openrouter":{"modelOverrides":{"__proto__":{"compat":{"openRouterRouting":{"zdr":true}}}}}}}';
+  assert.throws(() => validateModelsConfig(bad), /rejected reserved key '__proto__'.*modelOverrides\.<model>/);
+});
+
+test("reserved key 'constructor' is rejected", () => {
+  const bad = '{"providers":{"constructor":{"modelOverrides":{"m/x":{"compat":{"openRouterRouting":{"zdr":true}}}}}}}';
+  assert.throws(() => validateModelsConfig(bad), /rejected reserved key 'constructor'/);
+});
+
+test("sort accepts object form (OpenRouter {by,partition})", () => {
+  const cfg = JSON.stringify({
+    providers: {
+      openrouter: {
+        modelOverrides: {
+          "m/x": { compat: { openRouterRouting: { sort: { by: "price", partition: "model" } } } },
+        },
+      },
+    },
+  });
+  const out = validateModelsConfig(cfg);
+  assert.deepEqual(out.providers.openrouter.modelOverrides["m/x"].compat.openRouterRouting.sort, { by: "price", partition: "model" });
+});
+
+test("max_price accepts object form (OpenRouter {prompt,completion})", () => {
+  const cfg = JSON.stringify({
+    providers: {
+      openrouter: {
+        modelOverrides: {
+          "m/x": { compat: { openRouterRouting: { max_price: { prompt: 10, completion: 20 } } } },
+        },
+      },
+    },
+  });
+  validateModelsConfig(cfg); // passes
 });
 
 test("quantizations + ignore array passes", () => {
@@ -218,6 +262,17 @@ test("writeModelsConfig with empty input no-ops when no file exists", () => {
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test("writeModelsConfig with empty input does NOT require HOME (backward compat)", () => {
+  // A caller who never set models_config must not fail because this step runs
+  // unconditionally. Empty input + unset HOME → noop, no throw.
+  const { action } = writeModelsConfig("", undefined);
+  assert.equal(action, "noop");
+});
+
+test("writeModelsConfig with non-empty input still requires HOME", () => {
+  assert.throws(() => writeModelsConfig(valid, undefined), /HOME is not set/);
 });
 
 test("writeModelsConfig rejects dangerous input before touching disk", () => {

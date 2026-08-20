@@ -22,6 +22,14 @@ import { join } from "node:path";
 export const MAX_BYTES = 64 * 1024;
 
 // Allowed keys at each level of the accepted shape. Anything else is rejected.
+// The security boundary is two-fold: (1) only this key set is accepted, and
+// (2) provider-level endpoint/credential fields (baseUrl, apiKey, headers,
+// endpoint) are never on the allowlist, so they are rejected — that blocks the
+// secret-exfiltration path where a models.json redirects the key-bearing request.
+// The openRouterRouting values are OpenRouter provider-selection hints (slugs,
+// prices, booleans) sent as-is to OpenRouter's `provider` field — never URLs —
+// so order/only/max_price/etc. are safe to pass through (verified against pi's
+// docs/models.md `openRouterRouting` table).
 const ALLOWED = {
   top: ["providers"],
   provider: ["modelOverrides"],
@@ -37,20 +45,21 @@ const ALLOWED = {
     "max_price",
     "only",
     "require_parameters",
+    "data_collection",
+    "enforce_distillable_text",
+    "preferred_min_throughput",
   ],
 };
 
-const TYPES = {
-  zdr: "boolean",
-  sort: "string",
-  allow_fallbacks: "boolean",
-  max_price: "scalar", // number or string
-  require_parameters: "boolean",
-  quantizations: "array",
-  ignore: "array",
-  order: "array",
-  only: "array",
-};
+// Reserved names that are legal JSON object keys but would mutate the prototype
+// chain if used as bracket-assignment keys on a plain {} (CWE-1321). Reject them
+// loudly so a caller can't silently lose a guardrail branch via {"__proto__":...}.
+const RESERVED = new Set(["__proto__", "constructor", "prototype"]);
+function assertSafeKey(key, where) {
+  if (RESERVED.has(key)) {
+    throw new Error(`models_config: rejected reserved key '${key}' at ${where}`);
+  }
+}
 
 function isObj(v) {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -60,6 +69,14 @@ function isStr(v) {
 }
 function isArr(v) {
   return Array.isArray(v) && v.every((x) => typeof x === "string");
+}
+// Routing-preference values: OpenRouter accepts booleans, strings, numbers,
+// arrays of slugs, and plain objects (sort: {by,partition}, max_price: {prompt,completion}).
+// All are safe to pass through; none are endpoints.
+function isRouteVal(v) {
+  if (v === null) return false;
+  const t = typeof v;
+  return t === "boolean" || t === "string" || t === "number" || Array.isArray(v) || isObj(v);
 }
 
 /**
@@ -108,6 +125,7 @@ export function validateModelsConfig(raw) {
       if (!isStr(provName) || !provName) {
         throw new Error(`models_config: provider name must be a non-empty string`);
       }
+      assertSafeKey(provName, `providers.<provider>`);
       if (!isObj(provVal)) {
         throw new Error(`models_config: providers.${provName} must be an object`);
       }
@@ -129,6 +147,7 @@ export function validateModelsConfig(raw) {
           if (!isStr(modelId) || !modelId) {
             throw new Error(`models_config: model id must be a non-empty string`);
           }
+          assertSafeKey(modelId, `providers.${provName}.modelOverrides.<model>`);
           if (!isObj(modelVal)) {
             throw new Error(`models_config: providers.${provName}.${pk}.${modelId} must be an object`);
           }
@@ -159,18 +178,8 @@ export function validateModelsConfig(raw) {
                     `models_config: rejected routing key '...${ck}.${rk}' (allowed: ${ALLOWED.openRouterRouting.join(", ")})`,
                   );
                 }
-                const want = TYPES[rk];
-                if (want === "boolean" && typeof rv !== "boolean") {
-                  throw new Error(`models_config: ${ck}.${rk} must be a boolean`);
-                }
-                if (want === "string" && typeof rv !== "string") {
-                  throw new Error(`models_config: ${ck}.${rk} must be a string`);
-                }
-                if (want === "array" && !isArr(rv)) {
-                  throw new Error(`models_config: ${ck}.${rk} must be an array of strings`);
-                }
-                if (want === "scalar" && typeof rv !== "number" && typeof rv !== "string") {
-                  throw new Error(`models_config: ${ck}.${rk} must be a number or string`);
+                if (!isRouteVal(rv)) {
+                  throw new Error(`models_config: ${ck}.${rk} must be a boolean, string, number, array, or object`);
                 }
                 out[k][provName][pk][modelId][mk][ck][rk] = rv;
               }
@@ -203,20 +212,26 @@ export function modelsJsonPath(home) {
  * @returns {{path: string, action: "wrote"|"removed"|"noop"}} info
  */
 export function writeModelsConfig(raw, home) {
-  const file = modelsJsonPath(home);
   const trimmed = (raw || "").trim();
+  // Empty/omitted input: opt-out. Do NOT require HOME here — a caller who never
+  // set models_config must not fail just because this step always runs. If HOME
+  // is available, clean any stale file from a prior run on a persistent runner;
+  // if HOME is unset, there's nothing we can locate to clean, so no-op.
   if (!trimmed) {
-    // Clean state: remove any models.json left by a prior job so "omit the
-    // input and nothing changes" is literally true on persistent runners.
-    if (existsSync(file)) {
-      unlinkSync(file);
-      return { path: file, action: "removed" };
+    if (home) {
+      const file = modelsJsonPath(home);
+      if (existsSync(file)) {
+        unlinkSync(file);
+        return { path: file, action: "removed" };
+      }
     }
-    return { path: file, action: "noop" };
+    return { path: home ? modelsJsonPath(home) : "<unset>", action: "noop" };
   }
+  // Non-empty: validate first (cheap, no FS), then require HOME to write.
   const validated = validateModelsConfig(raw);
+  const file = modelsJsonPath(home);
   mkdirSync(join(home, ".pi", "agent"), { recursive: true });
-  writeFileSync(file, JSON.stringify(validated, null, 2) + "\n");
+  writeFileSync(file, JSON.stringify(validated, null, 2) + "\n", { mode: 0o600 });
   return { path: file, action: "wrote" };
 }
 

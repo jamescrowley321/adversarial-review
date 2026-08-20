@@ -7,3 +7,4 @@ review-diff.patch
 .idea/
 .vscode/
 *.swp
+node_modules/
