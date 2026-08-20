@@ -11,6 +11,20 @@ previous release and can be curated in the release PR before it is merged. See
 [CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. `[1.4.1]` and
 the older sections below it predate the automation and were written by hand.
 
+## [1.6.0](https://github.com/jamescrowley321/adversarial-review/compare/v1.5.0...v1.6.0) (2026-08-20)
+
+
+### Features
+
+* **action:** add models_config input for per-model OpenRouter routing guardrails ([c8eb0ac](https://github.com/jamescrowley321/adversarial-review/commit/c8eb0ac52691b7f27546c749c1be7774db738283))
+* **action:** add models_config input for per-model OpenRouter routing guardrails ([9b11b89](https://github.com/jamescrowley321/adversarial-review/commit/9b11b89eb748be9d42e71fe6e55b1a1ab34e1ba2))
+
+
+### Bug Fixes
+
+* **action:** block prototype pollution + HOME-unset backward-compat regression ([c47db9d](https://github.com/jamescrowley321/adversarial-review/commit/c47db9dc3dbddea50959769d4a2fa368bac43261))
+* **action:** strict-allowlist models_config validation (secret-exfil path) + tests ([20ac69c](https://github.com/jamescrowley321/adversarial-review/commit/20ac69c18e1ed389a246c19bed1912f81b0de3ce))
+
 ## [Unreleased]
 
 ### Added
