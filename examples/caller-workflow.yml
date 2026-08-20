@@ -106,6 +106,26 @@ jobs:
           lens: ${{ matrix.lens }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          # Escalate off the GLM 5.2 workhorse when it underperforms; the
+          # sanctioned Anthropic pick is claude-sonnet-5 (merge gates / security
+          # lenses). Keep it on OpenRouter as the governed choke point.
+          model: anthropic/claude-sonnet-5
+          # Enforce per-model OpenRouter routing guardrails on the request itself
+          # (ZDR, price-sort inside filters, full-precision hosts, maker-ignore),
+          # not just at the account level. JSON for pi's ~/.pi/agent/models.json.
+          # Omit to fall back to pi/defaults + account settings.
+          models_config: |
+            {
+              "providers": {
+                "openrouter": {
+                  "modelOverrides": {
+                    "anthropic/claude-sonnet-5": {
+                      "compat": { "openRouterRouting": { "sort": "price", "zdr": true } }
+                    }
+                  }
+                }
+              }
+            }
 
   gate:
     name: Merge Gate

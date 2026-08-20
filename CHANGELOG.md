@@ -11,6 +11,16 @@ previous release and can be curated in the release PR before it is merged. See
 [CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. `[1.4.1]` and
 the older sections below it predate the automation and were written by hand.
 
+## [Unreleased]
+
+### Added
+- **`models_config` input** — optional JSON for pi's `~/.pi/agent/models.json`,
+  written before a lens runs (`mode: lens` only). Lets callers enforce per-model
+  OpenRouter routing guardrails (`compat.openRouterRouting`: `zdr`, `sort`,
+  `quantizations`, `ignore`) on the provider request itself, instead of relying
+  solely on account-level toggles. Invalid JSON fails the job loudly. Omit to
+  keep prior behavior. Backward compatible.
+
 ## [1.5.0](https://github.com/jamescrowley321/adversarial-review/compare/v1.4.1...v1.5.0) (2026-08-18)
 
 

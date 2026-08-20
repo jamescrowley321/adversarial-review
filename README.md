@@ -78,6 +78,7 @@ merge is blocked until the MUST FIX findings are resolved.
 | `api_key` | — | Provider key (required for `mode: lens`) |
 | `provider` | `openrouter` | pi provider backend |
 | `model` | `z-ai/glm-5.2` | Any model your provider exposes |
+| `models_config` | — (empty) | JSON for pi's `~/.pi/agent/models.json`, written before the lens runs (`mode: lens` only). Use it to enforce per-model OpenRouter routing guardrails — `compat.openRouterRouting` with `zdr: true`, `sort: "price"`, `quantizations`, and `ignore` lists — on the request itself, not just at the account level. Invalid JSON fails the job. Omit to fall back to pi/defaults + account settings. |
 | `thinking_level` | `medium` | `low` \| `medium` \| `high` |
 | `diff_max_lines` | `2000` | Diff truncation guard |
 | `diff_max_bytes` | `204800` | Diff truncation guard |

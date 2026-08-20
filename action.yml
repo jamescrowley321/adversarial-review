@@ -51,6 +51,17 @@ inputs:
     description: "Model id for the provider."
     required: false
     default: 'z-ai/glm-5.2'
+  models_config:
+    description: |
+      Optional JSON content for pi's `~/.pi/agent/models.json`, written before the lens runs
+      (mode=lens only). Use this to enforce per-model OpenRouter routing guardrails — e.g.
+      `compat.openRouterRouting` with `zdr: true`, `sort: "price"`, `quantizations`, and
+      `ignore` lists — so the provider request carries your compliance filters instead of
+      relying solely on account-level toggles. The JSON is validated before writing; an
+      invalid value fails the job loudly. When unset, no models.json is written and the
+      action behaves as before (routing falls back to pi/defaults + account settings).
+    required: false
+    default: ''
   thinking_level:
     description: "pi thinking level: low | medium | high."
     required: false
@@ -194,6 +205,30 @@ runs:
 
         const delim = "ADV_REVIEW_PROMPT_EOF";
         fs.appendFileSync(process.env.GITHUB_ENV, `COMPOSED_PROMPT<<${delim}\n${prompt}\n${delim}\n`);
+
+    # ── Write pi's models.json so per-model OpenRouter routing guardrails (ZDR,
+    #    price-sort, precision, maker-ignore) are enforced on the provider request,
+    #    not just at the account level. Only written when the caller supplies
+    #    models_config; otherwise behavior is unchanged. ──
+    - name: Write pi models.json (provider routing guardrails)
+      if: inputs.mode == 'lens' && inputs.models_config != ''
+      shell: node {0}
+      env:
+        MODELS_CONFIG: ${{ inputs.models_config }}
+      run: |
+        const fs = require("fs");
+        const path = require("path");
+        const raw = process.env.MODELS_CONFIG || "";
+        if (raw.trim()) {
+          let parsed;
+          try { parsed = JSON.parse(raw); }
+          catch (e) { console.log(`::error::models_config is not valid JSON: ${e.message}`); process.exit(1); }
+          const dir = path.join(process.env.HOME, ".pi", "agent");
+          fs.mkdirSync(dir, { recursive: true });
+          const file = path.join(dir, "models.json");
+          fs.writeFileSync(file, JSON.stringify(parsed, null, 2) + "\n");
+          console.log(`Wrote ${file}`);
+        }
 
     - name: Run adversarial lens
       id: pi
