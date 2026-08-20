@@ -18,8 +18,14 @@ the older sections below it predate the automation and were written by hand.
   written before a lens runs (`mode: lens` only). Lets callers enforce per-model
   OpenRouter routing guardrails (`compat.openRouterRouting`: `zdr`, `sort`,
   `quantizations`, `ignore`) on the provider request itself, instead of relying
-  solely on account-level toggles. Invalid JSON fails the job loudly. Omit to
-  keep prior behavior. Backward compatible.
+  solely on account-level toggles. **Strict allowlist validation:** only
+  `providers.<provider>.modelOverrides.<model>.compat.openRouterRouting` with
+  safe scalar/array keys is accepted; dangerous keys (`baseUrl`, `endpoint`,
+  `headers`, `apiKey`, `token`, …) are rejected loudly, closing a secret-
+  exfiltration path if the input were ever derived from untrusted data. Empty/
+  omitted input removes any stale file (no-op on ephemeral runners). Backward
+  compatible. Validation lives in `scripts/models-config.mjs`, unit-tested in
+  `scripts/models-config.test.mjs` and enforced in CI (`lint.yml`).
 
 ## [1.5.0](https://github.com/jamescrowley321/adversarial-review/compare/v1.4.1...v1.5.0) (2026-08-18)
 

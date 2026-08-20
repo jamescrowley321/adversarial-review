@@ -121,6 +121,9 @@ jobs:
                   "modelOverrides": {
                     "anthropic/claude-sonnet-5": {
                       "compat": { "openRouterRouting": { "sort": "price", "zdr": true } }
+                    },
+                    "z-ai/glm-5.2": {
+                      "compat": { "openRouterRouting": { "sort": "price", "zdr": true, "quantizations": ["fp8"], "ignore": ["z-ai"] } }
                     }
                   }
                 }
