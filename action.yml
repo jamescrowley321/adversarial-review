@@ -51,6 +51,22 @@ inputs:
     description: "Model id for the provider."
     required: false
     default: 'z-ai/glm-5.2'
+  models_config:
+    description: |
+      Optional JSON for pi's `~/.pi/agent/models.json`, written before the lens runs
+      (mode=lens only). Use this to enforce per-model OpenRouter routing guardrails —
+      e.g. `compat.openRouterRouting` with `zdr: true`, `sort: "price"`, `quantizations`,
+      and `ignore` lists — so the provider request carries your compliance filters instead
+      of relying solely on account-level toggles. STRICT ALLOWLIST: only the shape
+      `providers.<provider>.modelOverrides.<model>.compat.openRouterRouting` with safe
+      scalar/array keys is accepted; dangerous keys (`baseUrl`, `endpoint`, `headers`,
+      `apiKey`, `token`, …) are rejected loudly, because a models.json that redirects the
+      provider endpoint could exfiltrate the API key used by the lens. Invalid/out-of-
+      schema JSON fails the job. When unset/empty, no file is written and any stale file
+      from a prior run is removed, so omitting the input is a true no-op. Must be
+      workflow-author-controlled; never derive from untrusted PR/issue content.
+    required: false
+    default: ''
   thinking_level:
     description: "pi thinking level: low | medium | high."
     required: false
@@ -194,6 +210,24 @@ runs:
 
         const delim = "ADV_REVIEW_PROMPT_EOF";
         fs.appendFileSync(process.env.GITHUB_ENV, `COMPOSED_PROMPT<<${delim}\n${prompt}\n${delim}\n`);
+
+    # ── Write pi's models.json so per-model OpenRouter routing guardrails (ZDR,
+    #    price-sort, precision, maker-ignore) are enforced on the provider request,
+    #    not just at the account level. Validation + filesystem logic lives in
+    #    scripts/models-config.mjs (unit-tested in scripts/models-config.test.mjs);
+    #    this step just invokes it. Runs for every lens so an empty/omitted input
+    #    also removes any stale file left on a non-ephemeral runner. The validator
+    #    enforces a STRICT ALLOWLIST — only
+    #    providers.<provider>.modelOverrides.<model>.compat.openRouterRouting with
+    #    safe scalar/array keys — so a models_config that tries to override
+    #    baseUrl/endpoint/headers/apiKey (a secret-exfiltration path) is rejected
+    #    loudly, regardless of how a caller sourced the input. ──
+    - name: Write pi models.json (provider routing guardrails)
+      if: inputs.mode == 'lens'
+      shell: bash
+      env:
+        MODELS_CONFIG: ${{ inputs.models_config }}
+      run: node "${{ github.action_path }}/scripts/models-config.mjs"
 
     - name: Run adversarial lens
       id: pi

@@ -28,6 +28,9 @@ jobs:
             ...LENSES.map((l) => `lenses/${l}.md`),
             "examples/caller-workflow.yml",
             "scripts/run-local.mjs",
+            "scripts/models-config.mjs",
+            "scripts/models-config.test.mjs",
+            "scripts/check-example.mjs",
           ];
           const missing = required.filter((f) => !fs.existsSync(f));
           if (missing.length) {
@@ -55,3 +58,15 @@ jobs:
 
       - name: Syntax-check the Node runner
         run: node --check scripts/run-local.mjs
+
+      - name: Syntax-check the models-config module
+        run: node --check scripts/models-config.mjs
+
+      - name: Unit-test models-config validation (allowlist, types, clean-state)
+        run: node --test scripts/models-config.test.mjs
+
+      - name: Validate the example workflow's models_config against the allowlist
+        run: node scripts/check-example.mjs
+
+      - name: Validate the example workflow parses as YAML
+        run: npx --yes js-yaml@4 examples/caller-workflow.yml > /dev/null
