@@ -1,22 +1,29 @@
 #!/usr/bin/env node
 // Adversarial Review — local mode (Node, no shell).
 //
-// Runs the review personas against your working branch BEFORE you push, using
-// the pi CLI. Each lens reads the branch diff and writes its findings to
-// .adversarial-review/<lens>.md. Language-agnostic.
+// Runs the review personas against your branch BEFORE you push, using the pi
+// CLI (headless, read-only). Each lens reads the diff and writes findings to
+// .adversarial-review/<lens>.md. Language-agnostic. Exits non-zero if any lens
+// raises a MUST FIX finding (or fails to run) — so it drops into a pre-push
+// hook or `make review` as a gate.
 //
 // Usage:
-//   node scripts/run-local.mjs                     # adversarial lenses vs origin/main
-//   node scripts/run-local.mjs --base main
+//   node scripts/run-local.mjs                     # lenses vs origin/main, gate on
+//   node scripts/run-local.mjs --base main         # diff against a different base
+//   node scripts/run-local.mjs --working           # review uncommitted changes (git diff HEAD)
 //   node scripts/run-local.mjs --lens sentinel,viper
+//   node scripts/run-local.mjs --no-gate           # report only, always exit 0
 //   PI_BIN=pi MODEL=z-ai/glm-5.2 node scripts/run-local.mjs
 //
 // Requires: git, the `pi` CLI on PATH, and a provider key in OPENROUTER_API_KEY.
-// Adjust the pi argv below for your pi version if needed.
+// Routing (ZDR + host guardrails) comes from ~/.pi/agent/models.json — see the
+// venture's agent-model-config.md. pi runs read-only (--tools read,grep,find,ls),
+// so a lens cannot modify your files even if a persona prompt is ignored.
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -39,7 +46,18 @@ function printHelp() {
     .filter((l) => l.startsWith("//")).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
 }
 
+// Detect a MUST FIX *finding* — a severity label in header/bold/bracket position —
+// not a prose mention ("no MUST FIX findings") or the severity-scale enumeration.
+// (CI uses the lenses' strict JSON shape; local markdown output is heuristic.)
+function hasMustFix(md) {
+  return /^#{1,6}\s*\[?\s*MUST FIX\b/m.test(md)   // ### MUST FIX header (severity is the heading)
+    || /\*\*\s*\[?\s*MUST FIX\b/.test(md)         // **MUST FIX… / **[MUST FIX…  (label at bold start)
+    || /\[\s*MUST FIX\s*\]/.test(md);             // [MUST FIX] tag
+}
+
 let base = "origin/main";
+let working = false;
+let gate = true;
 let lenses = ["blind", "edge-case", "acceptance", "sentinel", "viper"];
 let PI_BIN = process.env.PI_BIN || "pi";
 let PROVIDER = process.env.PROVIDER || "openrouter";
@@ -50,6 +68,8 @@ const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === "--base") base = argv[++i];
+  else if (a === "--working") working = true;
+  else if (a === "--no-gate") gate = false;
   else if (a === "--lens") lenses = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
   else if (a === "--model") MODEL = argv[++i];
   else if (a === "--provider") PROVIDER = argv[++i];
@@ -59,23 +79,52 @@ for (let i = 0; i < argv.length; i++) {
 
 mkdirSync(OUT, { recursive: true });
 
+// Non-destructive routing check: warn (never rewrite) if the OpenRouter model
+// isn't pinned to a ZDR route in the user's pi config. The dev owns models.json
+// (agent-model-config.md); we don't clobber it.
+if (PROVIDER === "openrouter") {
+  let cfg = null;
+  try {
+    cfg = JSON.parse(readFileSync(join(homedir(), ".pi", "agent", "models.json"), "utf8"));
+  } catch (e) {
+    console.log(e.code === "ENOENT"
+      ? `  ! warning: no ~/.pi/agent/models.json found — ZDR/host guardrails unenforced (see agent-model-config.md)`
+      : `  ! warning: could not read ~/.pi/agent/models.json (${e.message}) — ZDR check skipped`);
+  }
+  if (cfg) {
+    const zdr = cfg?.providers?.[PROVIDER]?.modelOverrides?.[MODEL]?.compat?.openRouterRouting?.zdr;
+    if (zdr !== true) {
+      console.log(`  ! warning: ZDR route not pinned for ${MODEL} in ~/.pi/agent/models.json — see agent-model-config.md`);
+    }
+  }
+}
+
 let diff;
+const gitArgs = working ? ["diff", "HEAD"] : ["diff", `${base}...HEAD`];
+const label = working ? "working tree (uncommitted)" : base;
 try {
-  diff = execFileSync("git", ["diff", `${base}...HEAD`], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  diff = execFileSync("git", gitArgs, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 } catch {
-  console.error(`error: could not diff against '${base}' — is it fetched? (git fetch origin)`);
+  console.error(working
+    ? "error: could not run `git diff HEAD`"
+    : `error: could not diff against '${base}' — is it fetched? (git fetch origin)`);
   process.exit(1);
 }
 const patch = join(OUT, "review-diff.patch");
 writeFileSync(patch, diff);
-if (!diff.trim()) { console.log(`No changes vs ${base} — nothing to review.`); process.exit(0); }
-console.log(`Diff: ${diff.split("\n").length} lines vs ${base}`);
+if (!diff.trim()) { console.log(`No changes vs ${label} — nothing to review.`); process.exit(0); }
+console.log(`Diff: ${diff.split("\n").length} lines vs ${label}`);
+
+const mustFix = []; // lenses that raised a MUST FIX
+const failed = [];  // lenses that could not run (incomplete review)
 
 for (const key of lenses) {
   const name = NAMES[key];
-  if (!name) { console.log(`skip: unknown lens '${key}'`); continue; }
+  // A requested lens that can't run makes the review incomplete → it must fail the
+  // gate, not be silently skipped.
+  if (!name) { console.log(`skip: unknown lens '${key}'`); failed.push(key); continue; }
   const personaPath = join(LENS_DIR, `${key}.md`);
-  if (!existsSync(personaPath)) { console.log(`skip: missing ${personaPath}`); continue; }
+  if (!existsSync(personaPath)) { console.log(`skip: missing ${personaPath}`); failed.push(key); continue; }
 
   const persona = readFileSync(personaPath, "utf8").split("__PR_NUMBER__").join("N/A (local review)");
   const prompt = [
@@ -92,17 +141,34 @@ for (const key of lenses) {
   ].join("\n");
 
   console.log(`── ${name} ──`);
-  const res = spawnSync(PI_BIN, ["--provider", PROVIDER, "--model", MODEL, "--thinking", THINKING], {
-    input: prompt, encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
-  });
-  if (res.error) { console.log(`  ! could not run ${PI_BIN}: ${res.error.message}`); continue; }
-  writeFileSync(join(OUT, `${key}.md`), res.stdout || "");
+  // -p: headless (process prompt from stdin and exit). --no-session: fresh
+  // context per lens. --tools read,grep,find,ls: read-only, cannot edit/run.
+  const res = spawnSync(
+    PI_BIN,
+    ["-p", "--no-session", "--tools", "read,grep,find,ls", "--provider", PROVIDER, "--model", MODEL, "--thinking", THINKING],
+    { input: prompt, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+  );
+  if (res.error) { console.log(`  ! could not run ${PI_BIN}: ${res.error.message}`); failed.push(key); continue; }
+  const out = res.stdout || "";
+  writeFileSync(join(OUT, `${key}.md`), out);
   if (res.status === 0) {
-    console.log(`  → ${join(OUT, `${key}.md`)}`);
+    const hit = hasMustFix(out);
+    if (hit) mustFix.push(key);
+    console.log(`  → ${join(OUT, `${key}.md`)}${hit ? "  [MUST FIX]" : ""}`);
   } else {
     writeFileSync(join(OUT, `${key}.err`), res.stderr || "");
     console.log(`  ! exit ${res.status} (see ${join(OUT, `${key}.err`)})`);
+    failed.push(key);
   }
 }
 
-console.log(`\nDone. Findings in ${OUT}/. Review MUST FIX items before pushing.`);
+console.log(`\nFindings in ${OUT}/.`);
+
+// Gate: fail on any MUST FIX, or if a lens could not run (a gate can't pass on
+// an incomplete review). --no-gate reports only.
+if (gate && (mustFix.length || failed.length)) {
+  if (mustFix.length) console.log(`GATE: FAIL — MUST FIX in: ${mustFix.join(", ")} (resolve before pushing)`);
+  if (failed.length) console.log(`GATE: FAIL — lens did not run: ${failed.join(", ")} (re-run; review is incomplete)`);
+  process.exit(1);
+}
+console.log(gate ? "GATE: PASS — no MUST FIX findings." : "Gate disabled (--no-gate); review the findings manually.");

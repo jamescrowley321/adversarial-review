@@ -175,15 +175,29 @@ to pin exactly. Releases are cut with [release-please]; see
 
 ## Local mode (pre-CI)
 
-Run the same lenses against your working tree before you push (Node, no shell):
+Run the same lenses against your change **before you push** — the developer-run
+counterpart to the CI Merge Gate. It's a plain Node script (no shell, no agent to
+adopt): each lens is one headless, **read-only** `pi` call over your diff.
 
 ```bash
-node scripts/run-local.mjs --base origin/main        # review your branch vs main
+node scripts/run-local.mjs                            # review your branch vs origin/main
+node scripts/run-local.mjs --base main               # different base
+node scripts/run-local.mjs --working                 # review uncommitted changes (git diff HEAD)
 node scripts/run-local.mjs --lens sentinel,viper     # a subset
+node scripts/run-local.mjs --no-gate                 # report only, always exit 0
 ```
 
-Requires the `pi` CLI and a provider key in `OPENROUTER_API_KEY`. Findings are
-written to `.adversarial-review/`.
+Requires `git`, the `pi` CLI, and a provider key in `OPENROUTER_API_KEY`. Findings
+are written to `.adversarial-review/<lens>.md` (severity: **MUST FIX / SHOULD FIX /
+NITPICK**).
+
+**It's a gate.** The script **exits non-zero** if any lens raises a `MUST FIX`
+finding, or if a requested lens can't run (an incomplete review can't pass) — so it
+drops into a pre-push hook or `make review`. Use `--no-gate` to report without
+failing. `pi` runs `--tools read,grep,find,ls`, so a lens cannot modify your files.
+
+Routing (ZDR + host guardrails) is taken from your `~/.pi/agent/models.json`; the
+script warns (never rewrites) if the model isn't pinned to a ZDR route.
 
 ## Credits & provenance
 
