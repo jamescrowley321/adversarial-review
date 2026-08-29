@@ -106,24 +106,18 @@ jobs:
           lens: ${{ matrix.lens }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key: ${{ secrets.OPENROUTER_API_KEY }}
-          # Escalate off the GLM 5.2 workhorse when it underperforms; the
-          # sanctioned Anthropic pick is claude-sonnet-5 (merge gates / security
-          # lenses). Keep it on OpenRouter as the governed choke point.
-          model: anthropic/claude-sonnet-5
-          # Enforce per-model OpenRouter routing guardrails on the request itself
-          # (ZDR, price-sort inside filters, full-precision hosts, maker-ignore),
-          # not just at the account level. JSON for pi's ~/.pi/agent/models.json.
-          # Omit to fall back to pi/defaults + account settings.
+          # Autorouting is the default (model: auto = OpenRouter Auto Router picks
+          # the model per task). Enforce routing floors on whatever it selects —
+          # ZDR + no data collection + fp8 (no degraded 4-bit hosts). Model family
+          # and cost tier stay open. JSON for pi's ~/.pi/agent/models.json; omit to
+          # fall back to account settings, or set `model:` to pin a specific slug.
           models_config: |
             {
               "providers": {
                 "openrouter": {
                   "modelOverrides": {
-                    "anthropic/claude-sonnet-5": {
-                      "compat": { "openRouterRouting": { "sort": "price", "zdr": true } }
-                    },
-                    "z-ai/glm-5.2": {
-                      "compat": { "openRouterRouting": { "sort": "price", "zdr": true, "quantizations": ["fp8"], "ignore": ["z-ai"] } }
+                    "auto": {
+                      "compat": { "openRouterRouting": { "zdr": true, "data_collection": "deny", "quantizations": ["fp8"] } }
                     }
                   }
                 }
