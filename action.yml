@@ -14,7 +14,7 @@
 # final `mode: gate` job that `needs:` them. See examples/caller-workflow.yml.
 #
 # Engine: the pi coding agent (pi.dev) via shaftoe/pi-coding-agent-action,
-# routed through OpenRouter (default model z-ai/glm-5.2). All overridable.
+# routed through OpenRouter; default model input `auto` (provider openrouter → the Auto Router). All overridable.
 
 name: 'Adversarial Review'
 description: 'Fresh-context, diff-only adversarial PR review — five skeptical AI lenses that fail the merge on real defects.'
@@ -48,9 +48,9 @@ inputs:
     required: false
     default: 'openrouter'
   model:
-    description: "Model id for the provider."
+    description: "Model id for the provider. Default 'auto' = OpenRouter Auto Router (picks the model per task); pass a specific slug to pin. Pair with models_config to enforce routing floors (ZDR, quantization) on whatever auto selects."
     required: false
-    default: 'z-ai/glm-5.2'
+    default: 'auto'
   models_config:
     description: |
       Optional JSON for pi's `~/.pi/agent/models.json`, written before the lens runs
