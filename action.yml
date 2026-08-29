@@ -14,7 +14,7 @@
 # final `mode: gate` job that `needs:` them. See examples/caller-workflow.yml.
 #
 # Engine: the pi coding agent (pi.dev) via shaftoe/pi-coding-agent-action,
-# routed through OpenRouter (default model openrouter/auto — the Auto Router). All overridable.
+# routed through OpenRouter; default model input `auto` (provider openrouter → the Auto Router). All overridable.
 
 name: 'Adversarial Review'
 description: 'Fresh-context, diff-only adversarial PR review — five skeptical AI lenses that fail the merge on real defects.'
