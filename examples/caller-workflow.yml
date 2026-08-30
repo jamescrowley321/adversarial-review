@@ -106,23 +106,17 @@ jobs:
           lens: ${{ matrix.lens }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key: ${{ secrets.OPENROUTER_API_KEY }}
-          # Autorouting is the default (model: auto = OpenRouter Auto Router picks
-          # the model per task). Enforce routing floors on whatever it selects —
-          # ZDR + no data collection + fp8 (no degraded 4-bit hosts). Model family
-          # and cost tier stay open. JSON for pi's ~/.pi/agent/models.json; omit to
-          # fall back to account settings, or set `model:` to pin a specific slug.
-          # Keyed under both "auto" and "openrouter/auto": pi's model id for the
-          # Auto Router is ambiguous between the two, so both carry the floor.
+          # Default is the pinned anthropic/claude-sonnet-5. Enforce the ZDR floor on
+          # the request so it routes to a Zero-Data-Retention endpoint (Bedrock/Vertex).
+          # JSON for pi's ~/.pi/agent/models.json; omit to fall back to account settings,
+          # or set `model:` to pin a different slug.
           models_config: |
             {
               "providers": {
                 "openrouter": {
                   "modelOverrides": {
-                    "auto": {
-                      "compat": { "openRouterRouting": { "zdr": true, "data_collection": "deny", "quantizations": ["fp8"] } }
-                    },
-                    "openrouter/auto": {
-                      "compat": { "openRouterRouting": { "zdr": true, "data_collection": "deny", "quantizations": ["fp8"] } }
+                    "anthropic/claude-sonnet-5": {
+                      "compat": { "openRouterRouting": { "zdr": true, "data_collection": "deny" } }
                     }
                   }
                 }
