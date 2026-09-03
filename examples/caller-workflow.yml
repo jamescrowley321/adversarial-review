@@ -56,7 +56,10 @@ jobs:
           };
           const keys = (process.env.ENABLED || "").split("\n")
             .map((l) => l.replace(/#.*/, "").trim()).filter(Boolean);
-          const include = keys.map((k) => ({ lens: k, name: NAMES[k] || k }));
+          if (keys.length === 0) throw new Error("At least one review lens must be enabled");
+          const unknown = keys.filter((k) => !Object.prototype.hasOwnProperty.call(NAMES, k));
+          if (unknown.length > 0) throw new Error(`Unknown review lenses: ${unknown.join(", ")}`);
+          const include = keys.map((k) => ({ lens: k, name: NAMES[k] }));
           const fs = require("fs");
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include })}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `csv=${keys.join(",")}\n`);
@@ -125,15 +128,34 @@ jobs:
 
   gate:
     name: Merge Gate
-    needs: [config, review]
+    needs: [config, preflight, review]
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: always() && needs.review.result != 'skipped'
+    if: always()
     permissions:
       contents: read
       pull-requests: read
     steps:
+      - name: Record exempt PR
+        if: github.event.pull_request.head.repo.fork == true || github.actor == 'dependabot[bot]'
+        run: echo "Adversarial review is intentionally exempt for fork and Dependabot PRs."
+      - name: Fail closed when prerequisites did not succeed
+        if: >-
+          github.event.pull_request.head.repo.fork == false &&
+          github.actor != 'dependabot[bot]' &&
+          (needs.config.result != 'success' || needs.preflight.result != 'success' || needs.review.result != 'success')
+        env:
+          CONFIG_RESULT: ${{ needs.config.result }}
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          REVIEW_RESULT: ${{ needs.review.result }}
+        run: |
+          echo "::error::Adversarial review prerequisites did not succeed (config=$CONFIG_RESULT, preflight=$PREFLIGHT_RESULT, review=$REVIEW_RESULT)."
+          exit 1
       - name: Adjudicate lenses
+        if: >-
+          github.event.pull_request.head.repo.fork == false &&
+          github.actor != 'dependabot[bot]' &&
+          needs.config.result == 'success' && needs.preflight.result == 'success' && needs.review.result == 'success'
         uses: jamescrowley321/adversarial-review@v1
         with:
           mode: gate
