@@ -90,7 +90,10 @@ jobs:
           };
           const keys = (process.env.ENABLED || "").split("\n")
             .map((l) => l.replace(/#.*/, "").trim()).filter(Boolean);
-          const include = keys.map((k) => ({ lens: k, name: NAMES[k] || k }));
+          if (keys.length === 0) throw new Error("At least one review lens must be enabled");
+          const unknown = keys.filter((k) => !NAMES[k]);
+          if (unknown.length > 0) throw new Error(`Unknown review lenses: ${unknown.join(", ")}`);
+          const include = keys.map((k) => ({ lens: k, name: NAMES[k] }));
           const fs = require("fs");
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include })}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `csv=${keys.join(",")}\n`);
@@ -139,13 +142,35 @@ jobs:
     needs: [config, review]
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: always() && needs.review.result != 'skipped'
+    if: always()
     permissions:
       contents: read
       pull-requests: read
     steps:
+      - name: Record exempt PR
+        if: github.event.pull_request.head.repo.fork == true || github.actor == 'dependabot[bot]'
+        run: echo "Adversarial review is intentionally exempt for fork and Dependabot PRs."
+      - name: Fail closed when prerequisites did not succeed
+        if: >-
+          github.event.pull_request.head.repo.fork == false &&
+          github.actor != 'dependabot[bot]' &&
+          (needs.config.result != 'success' || needs.review.result != 'success')
+        env:
+          CONFIG_RESULT: ${{ needs.config.result }}
+          REVIEW_RESULT: ${{ needs.review.result }}
+        run: |
+          echo "::error::Adversarial review prerequisites did not succeed (config=$CONFIG_RESULT, review=$REVIEW_RESULT)."
+          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: >-
+          github.event.pull_request.head.repo.fork == false &&
+          github.actor != 'dependabot[bot]' &&
+          needs.config.result == 'success' && needs.review.result == 'success'
       - name: Adjudicate lenses
+        if: >-
+          github.event.pull_request.head.repo.fork == false &&
+          github.actor != 'dependabot[bot]' &&
+          needs.config.result == 'success' && needs.review.result == 'success'
         uses: ./
         with:
           mode: gate
