@@ -326,9 +326,16 @@ runs:
           // heading is "Sentinel — Security Auditor Agent", and some models emit
           // the subtitle despite being instructed to emit the primary name.
           const aliases = {
+            "blind hunter — adversarial code review agent": "blind hunter",
+            "edge case hunter — exhaustive path analysis agent": "edge case hunter",
+            "acceptance auditor — spec compliance review agent": "acceptance auditor",
+            "sentinel — security auditor agent": "sentinel",
             "security auditor": "sentinel",
             "viper — red team review agent": "viper",
+            "compliance auditor — policy & provenance review agent": "compliance auditor",
             compliance: "compliance auditor",
+            "owasp web top 10 — application security lens": "owasp web top 10",
+            "owasp genai/llm top 10 — ai application security lens": "owasp llm top 10",
           };
           const rawEmittedNorm = norm(emittedLens);
           const emittedNorm = Object.prototype.hasOwnProperty.call(aliases, rawEmittedNorm)
