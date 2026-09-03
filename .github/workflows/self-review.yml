@@ -137,6 +137,8 @@ jobs:
           # headroom to run all lenses in one wave — keeps the review under 10 min.
           model: anthropic/claude-sonnet-5
 
+  # Self-review intentionally has no preflight job: deterministic lint/security
+  # checks run independently, while this gate covers only config + lens review.
   gate:
     name: Merge Gate
     needs: [config, review]

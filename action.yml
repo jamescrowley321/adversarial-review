@@ -325,14 +325,16 @@ runs:
           // Accept documented persona subtitles as explicit aliases. Sentinel's
           // heading is "Sentinel — Security Auditor Agent", and some models emit
           // the subtitle despite being instructed to emit the primary name.
-          const aliases = { "security auditor": "sentinel" };
-          const emittedNorm = aliases[norm(emittedLens)] || norm(emittedLens);
+          const aliases = {
+            "security auditor": "sentinel",
+            compliance: "compliance auditor",
+          };
+          const rawEmittedNorm = norm(emittedLens);
+          const emittedNorm = Object.prototype.hasOwnProperty.call(aliases, rawEmittedNorm)
+            ? aliases[rawEmittedNorm]
+            : rawEmittedNorm;
           const expectedNorm = norm(lensName);
-          const lensOk = emittedLens && (
-            emittedNorm === expectedNorm ||
-            emittedNorm.includes(expectedNorm) ||
-            expectedNorm.includes(emittedNorm)
-          );
+          const lensOk = emittedLens && emittedNorm === expectedNorm;
           if (!lensOk) {
             return fail(`agent emitted lens="${emittedLens}" but this job is "${lensName}". Re-run this job to retry.`);
           }
