@@ -91,7 +91,7 @@ jobs:
           const keys = (process.env.ENABLED || "").split("\n")
             .map((l) => l.replace(/#.*/, "").trim()).filter(Boolean);
           if (keys.length === 0) throw new Error("At least one review lens must be enabled");
-          const unknown = keys.filter((k) => !NAMES[k]);
+          const unknown = keys.filter((k) => !Object.prototype.hasOwnProperty.call(NAMES, k));
           if (unknown.length > 0) throw new Error(`Unknown review lenses: ${unknown.join(", ")}`);
           const include = keys.map((k) => ({ lens: k, name: NAMES[k] }));
           const fs = require("fs");
