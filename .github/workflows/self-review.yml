@@ -132,10 +132,12 @@ jobs:
           lens: ${{ matrix.lens }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key: ${{ secrets.OPENROUTER_API_KEY }}
-          # Sonnet 5: strong JSON adherence (GLM-5.2 emitted prose on ~6/8 lenses;
-          # that's why we left it), near-Opus finding quality, and enough rate
-          # headroom to run all lenses in one wave — keeps the review under 10 min.
-          model: anthropic/claude-sonnet-5
+          # Gemini 2.5 Pro: strong JSON adherence (GLM-5.2 emitted prose on ~6/8
+          # lenses), stable OpenRouter slug, and enough rate headroom to run all
+          # lenses in one wave. Sonnet 5 is unusable via openrouter+pi right now:
+          # OpenRouter retired the undated anthropic/claude-sonnet-5 alias while
+          # pi's catalog lacks the dated snapshot, so neither slug resolves.
+          model: google/gemini-2.5-pro
 
   # Self-review intentionally has no preflight job: deterministic lint/security
   # checks run independently, while this gate covers only config + lens review.

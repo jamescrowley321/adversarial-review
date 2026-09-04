@@ -14,7 +14,7 @@
 # final `mode: gate` job that `needs:` them. See examples/caller-workflow.yml.
 #
 # Engine: the pi coding agent (pi.dev) via shaftoe/pi-coding-agent-action,
-# routed through OpenRouter; default model anthropic/claude-sonnet-5 (ZDR via Bedrock/Vertex). All overridable.
+# routed through OpenRouter; default model google/gemini-2.5-pro (strong JSON adherence, stable slug). All overridable.
 
 name: 'Adversarial Review'
 description: 'Fresh-context, diff-only adversarial PR review — five skeptical AI lenses that fail the merge on real defects.'
@@ -48,9 +48,9 @@ inputs:
     required: false
     default: 'openrouter'
   model:
-    description: "Model id for the provider. Default is the pinned, ZDR-routed anthropic/claude-sonnet-5 (routes to Bedrock/Vertex). Override to any model; pair with models_config to enforce routing floors."
+    description: "Model id for the provider. Default is google/gemini-2.5-pro — strong instruction/JSON adherence and a stable OpenRouter slug. NOTE: pin models that pi's catalog AND OpenRouter both serve: OpenRouter retired the undated anthropic/claude-sonnet-5 alias (chat/completions 404s) while pi's catalog lacks the dated snapshot, so no Anthropic Sonnet-5 slug currently resolves through openrouter+pi. Override to any model; pair with models_config to enforce routing floors."
     required: false
-    default: 'anthropic/claude-sonnet-5'
+    default: 'google/gemini-2.5-pro'
   models_config:
     description: |
       Optional JSON for pi's `~/.pi/agent/models.json`, written before the lens runs
