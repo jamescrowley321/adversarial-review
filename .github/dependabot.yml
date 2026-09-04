@@ -6,6 +6,10 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # Don't propose a bump until a release has been public for a week — newly
+    # published action versions can be malicious or get yanked/repointed.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: ci
     groups:
