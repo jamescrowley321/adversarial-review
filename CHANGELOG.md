@@ -11,6 +11,20 @@ previous release and can be curated in the release PR before it is merged. See
 [CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. `[1.4.1]` and
 the older sections below it predate the automation and were written by hand.
 
+## [1.7.0](https://github.com/jamescrowley321/adversarial-review/compare/v1.6.0...v1.7.0) (2026-09-04)
+
+
+### Features
+
+* default to OpenRouter Auto Router (model: auto) ([#16](https://github.com/jamescrowley321/adversarial-review/issues/16)) ([c9de526](https://github.com/jamescrowley321/adversarial-review/commit/c9de526657a6b1b9253fb371dce47ed960527bc6))
+* pin default model to anthropic/claude-sonnet-5 (ZDR) ([#18](https://github.com/jamescrowley321/adversarial-review/issues/18)) ([de5a7f0](https://github.com/jamescrowley321/adversarial-review/commit/de5a7f0fe3b6a09f4d2493e34c83ee8755ea5bdb))
+
+
+### Bug Fixes
+
+* **ci:** make consumer gates fail closed ([#19](https://github.com/jamescrowley321/adversarial-review/issues/19)) ([f7a5183](https://github.com/jamescrowley321/adversarial-review/commit/f7a5183223d4490445c06f950b641c079c573228))
+* **sentinel:** emit lens name "Sentinel", not "Security Auditor" ([#21](https://github.com/jamescrowley321/adversarial-review/issues/21)) ([b643856](https://github.com/jamescrowley321/adversarial-review/commit/b643856776837834244fef21fb44daa9ea770aa8))
+
 ## [1.6.0](https://github.com/jamescrowley321/adversarial-review/compare/v1.5.0...v1.6.0) (2026-08-20)
 
 
