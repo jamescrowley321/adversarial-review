@@ -11,6 +11,13 @@ previous release and can be curated in the release PR before it is merged. See
 [CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. `[1.4.1]` and
 the older sections below it predate the automation and were written by hand.
 
+## [1.7.1](https://github.com/jamescrowley321/adversarial-review/compare/v1.7.0...v1.7.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* switch default review model to google/gemini-2.5-pro (sonnet-5 unusable via openrouter+pi) ([#23](https://github.com/jamescrowley321/adversarial-review/issues/23)) ([037954f](https://github.com/jamescrowley321/adversarial-review/commit/037954f49cf16021036e02eee5de2af04381530e))
+
 ## [1.7.0](https://github.com/jamescrowley321/adversarial-review/compare/v1.6.0...v1.7.0) (2026-09-04)
 
 
