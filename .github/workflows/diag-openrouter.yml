@@ -1,5 +1,5 @@
-# TEMPORARY diagnostic — probes OpenRouter from a GitHub-hosted runner to
-# determine why lens jobs get the openrouter.ai website's HTML 404 page.
+# TEMPORARY diagnostic — reproduces the failing lens call with a fetch logger
+# injected, to capture the exact URL that returns the HTML 404.
 # Delete this workflow (and its PR) once the outage is root-caused.
 name: Diag OpenRouter Edge
 
@@ -7,56 +7,62 @@ on:
   pull_request:
     branches: [main]
 
-permissions: {}
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
 
 jobs:
-  probe:
+  lens-logged:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 10
     steps:
-      - name: curl large-body probe from runner
-        env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: |
-          python3 - <<'PY'
-          import json, os, urllib.request
-          key = os.environ['OPENROUTER_API_KEY']
-          for kb in (10, 120, 250):
-              body = json.dumps({'model': 'anthropic/claude-sonnet-5',
-                  'messages': [{'role': 'user', 'content': 'Ignore filler, reply OK: ' + 'x' * (kb * 1024)}],
-                  'max_tokens': 5}).encode()
-              req = urllib.request.Request('https://openrouter.ai/api/v1/chat/completions', data=body,
-                  headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {key}'})
-              try:
-                  r = urllib.request.urlopen(req, timeout=120)
-                  print(f'{kb}KB -> {r.status} {r.headers.get("content-type")}'); r.read()
-              except urllib.error.HTTPError as e:
-                  b = e.read(100)
-                  html = b.startswith(b'<!DOCTYPE') or b.startswith(b'<html')
-                  print(f'{kb}KB -> {e.code} {e.headers.get("content-type")} html={html}')
-          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: pi small prompt, thinking off (baseline, passed last run)
-        env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      - name: Write fetch logger (logs method/URL/status only — never headers or bodies)
         run: |
-          npx -y @earendil-works/pi-coding-agent@0.82.1 --provider openrouter \
-            --model anthropic/claude-sonnet-5 -p "Reply with exactly: OK" 2>&1 | tail -5
+          cat > /tmp/log-fetch.cjs <<'JS'
+          const orig = globalThis.fetch;
+          if (orig) {
+            globalThis.fetch = async function (input, init) {
+              const url = typeof input === 'string' ? input : (input && input.url) || String(input);
+              const method = (init && init.method) || (input && input.method) || 'GET';
+              try {
+                const res = await orig.call(this, input, init);
+                console.error(`[fetch-log] ${method} ${url} -> ${res.status} ${res.headers.get('content-type')}`);
+                return res;
+              } catch (e) {
+                console.error(`[fetch-log] ${method} ${url} -> THREW ${e && e.message}`);
+                throw e;
+              }
+            };
+          }
+          JS
+          echo written
 
-      - name: pi small prompt, thinking medium
+      - name: Real lens call with fetch logging (expected to fail; that is the point)
+        id: lens
+        continue-on-error: true
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: |
-          npx -y @earendil-works/pi-coding-agent@0.82.1 --provider openrouter \
-            --model anthropic/claude-sonnet-5 --thinking-level medium \
-            -p "Reply with exactly: OK" 2>&1 | tail -5
+          NODE_OPTIONS: --require /tmp/log-fetch.cjs
+        uses: ./
+        with:
+          mode: lens
+          lens: blind
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          model: anthropic/claude-sonnet-5
 
-      - name: pi big prompt (150KB), thinking medium
+      - name: Direct dist invocation with logger (fallback if NODE_OPTIONS was stripped above)
+        if: always()
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          INPUT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TOKEN: ${{ secrets.OPENROUTER_API_KEY }}
+          INPUT_PROVIDER: openrouter
+          INPUT_MODEL: anthropic/claude-sonnet-5
+          INPUT_THINKING_LEVEL: medium
+          INPUT_PROMPT: "Reply with exactly: OK"
         run: |
-          python3 -c "print('Below is filler text; ignore it entirely and reply with exactly: OK\n' + ('lorem ipsum dolor sit amet ' * 6000))" > /tmp/bigprompt.txt
-          wc -c /tmp/bigprompt.txt
-          npx -y @earendil-works/pi-coding-agent@0.82.1 --provider openrouter \
-            --model anthropic/claude-sonnet-5 --thinking-level medium \
-            -p "$(cat /tmp/bigprompt.txt)" 2>&1 | tail -5
+          DIST=$(find /home/runner/work/_actions/shaftoe/pi-coding-agent-action -name index.js -path '*dist*' | head -1)
+          echo "dist: $DIST"
+          node --require /tmp/log-fetch.cjs "$DIST" 2>&1 | grep -aE '\[fetch-log\]|OK|error|Error|404' | grep -v 'api\.github\.com' | head -30 || true
