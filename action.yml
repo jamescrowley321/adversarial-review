@@ -342,7 +342,20 @@ runs:
             ? aliases[rawEmittedNorm]
             : rawEmittedNorm;
           const expectedNorm = norm(lensName);
-          const lensOk = emittedLens && emittedNorm === expectedNorm;
+          // Tolerant match (the explicit `aliases` map above only catches subtitles
+          // seen verbatim before — e.g. Gemini emits "Sentinel — Security Review
+          // Agent", which no map entry covers). Accept when the emitted name's
+          // primary segment (before any —/–/-/:/| subtitle) equals the expected
+          // name, or when either name contains the other. The lens keys are
+          // distinct enough (blind/edge-case/acceptance/sentinel/viper/compliance/
+          // owasp-*) that containment cannot cross-match one persona to another.
+          const primary = (s) => s.split(/\s*[—–:|]\s*|\s+-\s+/)[0].trim();
+          const lensOk = !!emittedLens && (
+            emittedNorm === expectedNorm ||
+            primary(emittedNorm) === expectedNorm ||
+            emittedNorm.includes(expectedNorm) ||
+            expectedNorm.includes(emittedNorm)
+          );
           if (!lensOk) {
             return fail(`agent emitted lens="${emittedLens}" but this job is "${lensName}". Re-run this job to retry.`);
           }
