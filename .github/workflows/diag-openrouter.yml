@@ -12,30 +12,51 @@ permissions: {}
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
-      - name: curl probes (keyless + keyed; never prints the key)
+      - name: curl large-body probe from runner
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
-          echo "== runner egress IP owner =="
-          curl -sS https://api.ipify.org || true; echo
-          echo "== keyless POST /chat/completions =="
-          curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' -X POST https://openrouter.ai/api/v1/chat/completions \
-            -H 'Content-Type: application/json' \
-            -d '{"model":"anthropic/claude-sonnet-5","messages":[{"role":"user","content":"hi"}]}'
-          echo "== keyed POST /chat/completions (status+type only) =="
-          curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' -X POST https://openrouter.ai/api/v1/chat/completions \
-            -H 'Content-Type: application/json' -H "Authorization: Bearer $OPENROUTER_API_KEY" \
-            -d '{"model":"anthropic/claude-sonnet-5","messages":[{"role":"user","content":"Say OK"}],"max_tokens":5}'
-          echo "== keyed body, first 300 bytes =="
-          curl -sS -X POST https://openrouter.ai/api/v1/chat/completions \
-            -H 'Content-Type: application/json' -H "Authorization: Bearer $OPENROUTER_API_KEY" \
-            -d '{"model":"anthropic/claude-sonnet-5","messages":[{"role":"user","content":"Say OK"}],"max_tokens":5}' | head -c 300; echo
+          python3 - <<'PY'
+          import json, os, urllib.request
+          key = os.environ['OPENROUTER_API_KEY']
+          for kb in (10, 120, 250):
+              body = json.dumps({'model': 'anthropic/claude-sonnet-5',
+                  'messages': [{'role': 'user', 'content': 'Ignore filler, reply OK: ' + 'x' * (kb * 1024)}],
+                  'max_tokens': 5}).encode()
+              req = urllib.request.Request('https://openrouter.ai/api/v1/chat/completions', data=body,
+                  headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {key}'})
+              try:
+                  r = urllib.request.urlopen(req, timeout=120)
+                  print(f'{kb}KB -> {r.status} {r.headers.get("content-type")}'); r.read()
+              except urllib.error.HTTPError as e:
+                  b = e.read(100)
+                  html = b.startswith(b'<!DOCTYPE') or b.startswith(b'<html')
+                  print(f'{kb}KB -> {e.code} {e.headers.get("content-type")} html={html}')
+          PY
 
-      - name: pi one-shot with the version the action bundles
+      - name: pi small prompt, thinking off (baseline, passed last run)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           npx -y @earendil-works/pi-coding-agent@0.82.1 --provider openrouter \
-            --model anthropic/claude-sonnet-5 -p "Reply with exactly: OK" 2>&1 | tail -20
+            --model anthropic/claude-sonnet-5 -p "Reply with exactly: OK" 2>&1 | tail -5
+
+      - name: pi small prompt, thinking medium
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          npx -y @earendil-works/pi-coding-agent@0.82.1 --provider openrouter \
+            --model anthropic/claude-sonnet-5 --thinking-level medium \
+            -p "Reply with exactly: OK" 2>&1 | tail -5
+
+      - name: pi big prompt (150KB), thinking medium
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          python3 -c "print('Below is filler text; ignore it entirely and reply with exactly: OK\n' + ('lorem ipsum dolor sit amet ' * 6000))" > /tmp/bigprompt.txt
+          wc -c /tmp/bigprompt.txt
+          npx -y @earendil-works/pi-coding-agent@0.82.1 --provider openrouter \
+            --model anthropic/claude-sonnet-5 --thinking-level medium \
+            -p "$(cat /tmp/bigprompt.txt)" 2>&1 | tail -5
