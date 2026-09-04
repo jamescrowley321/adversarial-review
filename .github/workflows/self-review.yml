@@ -17,10 +17,10 @@ concurrency:
   group: self-review-${{ github.ref }}
   cancel-in-progress: true
 
+# Write scopes live on the jobs that use them (`review` below); everything else
+# runs read-only.
 permissions:
   contents: read
-  pull-requests: write
-  checks: write
 
 jobs:
   # Belt-and-suspenders: explicitly cancel any older run of this workflow still
@@ -108,6 +108,10 @@ jobs:
     name: ${{ matrix.name }}
     needs: config
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # post findings as PR review comments
+      checks: write # publish the per-lens check run
     # Lenses run in PARALLEL (one job per lens). The agent never posts the review
     # itself — it emits findings as JSON and the action posts via Octokit
     # deterministically — so concurrent-load tool-call flakes are no longer a risk.

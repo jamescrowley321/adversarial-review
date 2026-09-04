@@ -23,9 +23,8 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: write # release commits, tags, GitHub Releases, and moving the major tag
-  pull-requests: write # open / update the release PR
+# Write scopes are granted on the release-please job itself, not workflow-wide.
+permissions: {}
 
 concurrency:
   # Serialize releases; never cancel one mid-publish.
@@ -35,6 +34,9 @@ concurrency:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # release commits, tags, GitHub Releases, and moving the major tag
+      pull-requests: write # open / update the release PR
     steps:
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
