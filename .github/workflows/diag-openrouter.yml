@@ -1,0 +1,41 @@
+# TEMPORARY diagnostic — probes OpenRouter from a GitHub-hosted runner to
+# determine why lens jobs get the openrouter.ai website's HTML 404 page.
+# Delete this workflow (and its PR) once the outage is root-caused.
+name: Diag OpenRouter Edge
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: curl probes (keyless + keyed; never prints the key)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          echo "== runner egress IP owner =="
+          curl -sS https://api.ipify.org || true; echo
+          echo "== keyless POST /chat/completions =="
+          curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' -X POST https://openrouter.ai/api/v1/chat/completions \
+            -H 'Content-Type: application/json' \
+            -d '{"model":"anthropic/claude-sonnet-5","messages":[{"role":"user","content":"hi"}]}'
+          echo "== keyed POST /chat/completions (status+type only) =="
+          curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' -X POST https://openrouter.ai/api/v1/chat/completions \
+            -H 'Content-Type: application/json' -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+            -d '{"model":"anthropic/claude-sonnet-5","messages":[{"role":"user","content":"Say OK"}],"max_tokens":5}'
+          echo "== keyed body, first 300 bytes =="
+          curl -sS -X POST https://openrouter.ai/api/v1/chat/completions \
+            -H 'Content-Type: application/json' -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+            -d '{"model":"anthropic/claude-sonnet-5","messages":[{"role":"user","content":"Say OK"}],"max_tokens":5}' | head -c 300; echo
+
+      - name: pi one-shot with the version the action bundles
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          npx -y @earendil-works/pi-coding-agent@0.82.1 --provider openrouter \
+            --model anthropic/claude-sonnet-5 -p "Reply with exactly: OK" 2>&1 | tail -20
