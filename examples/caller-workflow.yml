@@ -109,16 +109,16 @@ jobs:
           lens: ${{ matrix.lens }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key: ${{ secrets.OPENROUTER_API_KEY }}
-          # Default is the pinned anthropic/claude-sonnet-5. Enforce the ZDR floor on
-          # the request so it routes to a Zero-Data-Retention endpoint (Bedrock/Vertex).
+          # Default is the pinned google/gemini-2.5-pro. Enforce the ZDR floor on
+          # the request so it routes to a Zero-Data-Retention endpoint (e.g. Vertex).
           # JSON for pi's ~/.pi/agent/models.json; omit to fall back to account settings,
-          # or set `model:` to pin a different slug.
+          # or set `model:` to pin a different slug. Match this key to `model:`.
           models_config: |
             {
               "providers": {
                 "openrouter": {
                   "modelOverrides": {
-                    "anthropic/claude-sonnet-5": {
+                    "google/gemini-2.5-pro": {
                       "compat": { "openRouterRouting": { "zdr": true, "data_collection": "deny" } }
                     }
                   }
