@@ -192,11 +192,23 @@ runs:
         // the agent no way to self-discover owner/repo, and it fails the diff fetch.
         const repo = (process.env.REPO || "").trim();          // "owner/name"
         const [owner, name] = repo.split("/");
+        // Temporal grounding: a model whose training cutoff predates the run date
+        // otherwise flags legitimate current-year timestamps (commit/PR/copyright
+        // dates) as "future" / "fabricated" / an integrity problem — a false
+        // positive that fails the Merge Gate on healthy PRs (seen with Gemini 2.5
+        // Pro on 2026 dates). Anchor "now" to the real run date from trusted CI.
+        const today = new Date().toISOString().slice(0, 10);   // YYYY-MM-DD (UTC)
         const target =
           `You are reviewing GitHub pull request #${process.env.PR} in repository ` +
           `\`${repo}\`. When you call \`get_pr_diff\` or \`get_issue_or_pr_thread\`, pass ` +
           `exactly owner=\`${owner}\`, repo=\`${name}\`, pull_number=${process.env.PR}. ` +
-          `Do not guess or try other owner/repo values.\n\n`;
+          `Do not guess or try other owner/repo values.\n\n` +
+          `Temporal grounding: today's date is ${today} (UTC) — this is authoritative, ` +
+          `from CI, and may be later than your training cutoff. Dates on or before it ` +
+          `are past or present; do NOT flag recent or current-year timestamps (commit, ` +
+          `PR, changelog, or copyright dates) as "future", "post-dated", "fabricated", ` +
+          `or an integrity issue — they are expected. Only a date AFTER ${today}, or one ` +
+          `internally inconsistent with others in the diff, is worth noting.\n\n`;
 
         let prompt = target + fs.readFileSync(personaPath, "utf8").split("__PR_NUMBER__").join(process.env.PR) + "\n";
 
