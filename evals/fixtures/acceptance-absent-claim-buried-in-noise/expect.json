@@ -1,0 +1,2 @@
+{"lens":"acceptance","must_block":false,
+ "why":"PR #58 as it actually was: 5,855 insertions, almost all package-lock churn, with the real search-navigation change near the end. The Auditor reported the implementation 'missing'. Diff volume is the suspected trigger, so this fixture keeps the real change and buries it the way production did."}

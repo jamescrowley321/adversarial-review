@@ -1,0 +1,2 @@
+{"title":"test(e2e): wire Playwright into CI",
+ "body":"## Acceptance criteria\n- AC-1: the canonical CI workflow gains a Playwright E2E job that runs the suite on every PR\n- AC-2: CI installs the browser binaries the Playwright config actually declares\n"}

@@ -1,0 +1,2 @@
+{"title":"perf: speed up the reports endpoint",
+ "body":"## Acceptance criteria\n- AC-1: the reports endpoint responds in under 200ms\n- AC-2: existing access control is preserved\n"}

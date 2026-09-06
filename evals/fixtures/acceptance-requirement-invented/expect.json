@@ -1,0 +1,2 @@
+{"lens":"acceptance","must_block":false,
+ "why":"PR #58: the Auditor blocked claiming the config 'requires Chromium, Firefox and WebKit' and cited unnamed previous reviews. The config declares exactly one project, chromium, so installing chromium is correct."}

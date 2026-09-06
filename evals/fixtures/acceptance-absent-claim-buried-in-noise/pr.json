@@ -1,0 +1,2 @@
+{"title":"fix: establish frontend CI and test baseline",
+ "body":"## Summary\n- consolidate frontend Build, Lint, Type Check, Test and Playwright E2E into the canonical CI workflow\n- remove the duplicate Foundation CI workflow\n- restore search-result navigation to the asset-profile contract\n\n## Verification\n- npm test passes\n"}

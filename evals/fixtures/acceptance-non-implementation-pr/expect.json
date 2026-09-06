@@ -1,0 +1,2 @@
+{"lens":"acceptance","must_block":false,
+ "why":"PRs #52 and #56: the Auditor marked four ACs FAILED because the PR 'does not contain the workflow files'. The deliverable is the instruction text; the CI work is tracked in a separate issue."}

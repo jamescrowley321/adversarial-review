@@ -31,6 +31,7 @@ jobs:
             "scripts/models-config.mjs",
             "scripts/models-config.test.mjs",
             "scripts/check-example.mjs",
+            "evals/run.mjs",
           ];
           const missing = required.filter((f) => !fs.existsSync(f));
           if (missing.length) {
@@ -55,6 +56,12 @@ jobs:
             process.exit(1);
           }
           console.log(`Layout OK: ${LENSES.length} lenses, all referenced; no templated descriptions.`);
+
+      - name: Syntax-check the eval harness
+        run: node --check evals/run.mjs
+
+      - name: Lens evals — envelope contract (offline, layer 1)
+        run: node evals/run.mjs --layer 1
 
       - name: Syntax-check the Node runner
         run: node --check scripts/run-local.mjs

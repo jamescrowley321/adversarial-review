@@ -1,0 +1,2 @@
+{"lens":"acceptance","must_block":false,
+ "why":"PR #58: the Auditor claimed 'the implementation is missing' for search-result navigation and emitted MUST FIX, while the diff plainly contains the div -> Link change carrying the asset-profile href."}

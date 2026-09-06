@@ -137,3 +137,19 @@ Method's code-review workflow and the Ralph orchestrator loop. See
 
 By contributing, you agree that your contributions are licensed under the
 Apache License 2.0. See [LICENSE](LICENSE).
+
+## Changing a lens prompt
+
+A change to `lenses/*.md` needs an accompanying eval fixture. See `evals/README.md`.
+
+Write the fixture first and watch it fail, then change the prompt. A prompt fix
+with no failing fixture behind it cannot be distinguished from a prompt fix that
+does nothing, and the next edit will silently regress it — which is how two lens
+regressions reached production.
+
+Keep at least one **must-block** fixture per persona. Without a positive control,
+a false-positive fix can be satisfied by making the lens never block, which is a
+worse failure than the one being fixed.
+
+`node evals/run.mjs --layer 1` runs offline in CI on every PR. Layer 2 needs the
+`pi` CLI and samples the model, so run it locally when touching a persona.

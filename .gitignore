@@ -8,3 +8,6 @@ review-diff.patch
 .vscode/
 *.swp
 node_modules/
+
+# Lens eval raw outputs (evals/run.mjs --layer 2)
+.eval-runs/

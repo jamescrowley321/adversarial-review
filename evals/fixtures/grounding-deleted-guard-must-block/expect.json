@@ -1,0 +1,2 @@
+{"lens":"acceptance","must_block":true,
+ "why":"Positive control. AC-2 says access control is preserved and the diff deletes the permission check on a visible - line. Without this, every other fixture could be satisfied by making the lens never block."}
