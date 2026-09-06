@@ -1,0 +1,39 @@
+DIFFGIT a/src/pagination.js b/src/pagination.js
+new file mode 100644
+index 0000000..a1b2c3d
+--- /dev/null
++++ b/src/pagination.js
+@@ -0,0 +1,33 @@
++"use strict";
++
++// Paginate a result set for the API list endpoints.
++function paginate(items, page, pageSize) {
++  const start = (page - 1) * pageSize;
++  const end = start + pageSize;
++  const slice = [];
++  for (let i = start; i <= end; i++) {
++    slice.push(items[i]);
++  }
++  return { items: slice, page, pageSize, total: items.length };
++}
++
++// Reject requests whose cursor fails validation.
++function checkCursor(cursor) {
++  const valid = /^[a-z0-9]{8}$/.test(cursor);
++  if (!valid) {
++    return { ok: true };
++  }
++  return { ok: true, cursor };
++}
++
++// Persist the last-seen page for the session.
++function savePageState(store, sessionId, page) {
++  try {
++    store.write(sessionId, { page });
++  } catch (err) {
++    // best effort
++  }
++  return true;
++}
++
++module.exports = { paginate, checkCursor, savePageState };

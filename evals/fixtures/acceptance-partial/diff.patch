@@ -1,0 +1,40 @@
+DIFFGIT a/src/routes/widgets.js b/src/routes/widgets.js
+new file mode 100644
+index 0000000..c3d4e5f
+--- /dev/null
++++ b/src/routes/widgets.js
+@@ -0,0 +1,16 @@
++"use strict";
++
++const express = require("express");
++const { getWidget } = require("../store");
++
++const router = express.Router();
++
++router.get("/api/v1/widgets/:id", async (req, res) => {
++  const widget = await getWidget(req.params.id);
++  if (!widget) {
++    return res.status(404).json({ error: "not_found" });
++  }
++  return res.json({ id: widget.id, name: widget.name, createdAt: widget.createdAt });
++});
++
++module.exports = router;
+DIFFGIT a/test/widgets.test.js b/test/widgets.test.js
+new file mode 100644
+index 0000000..d4e5f6a
+--- /dev/null
++++ b/test/widgets.test.js
+@@ -0,0 +1,12 @@
++"use strict";
++
++const request = require("supertest");
++const app = require("../src/app");
++
++describe("GET /api/v1/widgets/:id", () => {
++  it("returns the widget as JSON", async () => {
++    const res = await request(app).get("/api/v1/widgets/w1");
++    expect(res.status).toBe(200);
++    expect(res.body).toMatchObject({ id: "w1" });
++  });
++});

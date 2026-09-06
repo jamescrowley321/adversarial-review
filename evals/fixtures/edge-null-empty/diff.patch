@@ -1,0 +1,32 @@
+DIFFGIT a/src/stats.js b/src/stats.js
+new file mode 100644
+index 0000000..b2c3d4e
+--- /dev/null
++++ b/src/stats.js
+@@ -0,0 +1,26 @@
++"use strict";
++
++const db = require("./db");
++
++// Mean of a numeric series.
++function average(values) {
++  let sum = 0;
++  for (const v of values) sum += v;
++  return sum / values.length;
++}
++
++// Read the sampling config uploaded by the operator.
++function parseConfig(raw) {
++  const cfg = JSON.parse(raw);
++  return { window: cfg.window, buckets: cfg.buckets };
++}
++
++// Store the daily rollup for the newest reading.
++async function storeRollup(readings) {
++  const latest = readings[0].id;
++  const mean = average(readings.map((r) => r.value));
++  await db.saveRollup(latest, mean);
++  return mean;
++}
++
++module.exports = { average, parseConfig, storeRollup };

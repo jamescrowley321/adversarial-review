@@ -1,0 +1,25 @@
+DIFFGIT a/README.md b/README.md
+index 3d4e5f6..4e5f6a7 100644
+--- a/README.md
++++ b/README.md
+@@ -12,6 +12,8 @@ npm start
+
+ The dashboard is served at `http://localhost:3000`.
+
++Screenshots of the main views live in `docs/screenshots/`.
++
+ ## Contributing
+
+ See CONTRIBUTING.md.
+DIFFGIT a/public/styles.css b/public/styles.css
+index 5f6a7b8..6a7b8c9 100644
+--- a/public/styles.css
++++ b/public/styles.css
+@@ -4,6 +4,6 @@ body {
+ }
+
+ .card {
+-  border-radius: 4px;
++  border-radius: 8px;
+   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+ }

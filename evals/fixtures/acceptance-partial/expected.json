@@ -1,0 +1,12 @@
+{
+  "class": "must-block",
+  "smoke": false,
+  "pr_title": "feat: widget detail endpoint",
+  "guards": "PR with three explicit acceptance criteria: AC-1 implemented and tested, AC-2 implemented but its required unit test is missing, AC-3 not implemented at all. (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "acceptance": {
+      "block": true,
+      "location_matches": "^src/routes/widgets\\.js:"
+    }
+  }
+}

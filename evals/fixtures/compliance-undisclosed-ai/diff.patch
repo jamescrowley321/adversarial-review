@@ -1,0 +1,23 @@
+DIFFGIT a/src/retry.js b/src/retry.js
+new file mode 100644
+index 0000000..3d4e5f6
+--- /dev/null
++++ b/src/retry.js
+@@ -0,0 +1,17 @@
++"use strict";
++
++// Retry an async operation with a fixed delay between attempts.
++async function withRetry(fn, attempts, delayMs) {
++  let lastErr;
++  for (let i = 0; i < attempts; i++) {
++    try {
++      return await fn();
++    } catch (err) {
++      lastErr = err;
++      await new Promise((resolve) => setTimeout(resolve, delayMs));
++    }
++  }
++  throw lastErr;
++}
++
++module.exports = { withRetry };

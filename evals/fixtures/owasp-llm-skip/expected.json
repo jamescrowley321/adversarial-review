@@ -1,0 +1,12 @@
+{
+  "class": "must-not-block",
+  "smoke": true,
+  "pr_title": "Pure arithmetic utility, no AI/LLM surface",
+  "guards": "Pure arithmetic utility, no AI/LLM surface. The OWASP LLM lens activation gate must fire: body starts with its header then the 'Skipped \u2014 no LLM/AI surface' line. (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "owasp-llm": {
+      "block": false,
+      "max_findings": 0
+    }
+  }
+}

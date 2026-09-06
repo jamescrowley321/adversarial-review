@@ -101,8 +101,14 @@ for (const id of ids) {
     if (typeof expect.block !== "boolean") fail(id, `${lensKey}: \`block\` must be a boolean`);
     if (fx.class === "must-block" && expect.block !== true) fail(id, `${lensKey}: class is must-block but block is not true`);
     if (fx.class === "must-not-block" && expect.block !== false) fail(id, `${lensKey}: class is must-not-block but block is not false`);
-    if (expect.block === true && !expect.location_matches) {
-      fail(id, `${lensKey}: a must-block expectation needs \`location_matches\` — blocking for the wrong reason is not a pass`);
+    if (expect.block === true && !expect.location_matches && !expect.location_not_asserted) {
+      fail(id, `${lensKey}: a must-block expectation needs \`location_matches\` — blocking for the wrong reason is not a pass. If the finding cannot be anchored to a diff path (e.g. it is about the PR body), set \`location_not_asserted\` to the reason instead.`);
+    }
+    if (expect.max_findings != null && (!Number.isInteger(expect.max_findings) || expect.max_findings < 0)) {
+      fail(id, `${lensKey}: max_findings must be a non-negative integer`);
+    }
+    if (expect.max_findings === 0 && expect.block !== false) {
+      fail(id, `${lensKey}: max_findings 0 means the activation gate fired, which cannot also block`);
     }
     if (expect.location_matches) {
       let re;

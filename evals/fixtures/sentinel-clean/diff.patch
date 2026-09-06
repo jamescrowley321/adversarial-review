@@ -1,0 +1,26 @@
+DIFFGIT a/src/routes/profile.js b/src/routes/profile.js
+new file mode 100644
+index 0000000..1b2c3d4
+--- /dev/null
++++ b/src/routes/profile.js
+@@ -0,0 +1,20 @@
++"use strict";
++
++const express = require("express");
++const db = require("../db");
++const { requireAuth } = require("../middleware/auth");
++
++const router = express.Router();
++
++// Return the signed-in user's own profile.
++router.get("/api/profile", requireAuth, async (req, res) => {
++  const rows = await db.query("SELECT id, name, email FROM users WHERE id = $1", [
++    req.user.id,
++  ]);
++  if (rows.length === 0) {
++    return res.status(404).json({ error: "not_found" });
++  }
++  return res.json(rows[0]);
++});
++
++module.exports = router;

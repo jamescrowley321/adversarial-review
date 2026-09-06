@@ -1,0 +1,16 @@
+{
+  "class": "must-block",
+  "smoke": false,
+  "pr_title": "Order-lookup endpoint with template-literal SQL (injection) and no owner",
+  "guards": "Order-lookup endpoint with template-literal SQL (injection) and no ownership check (IDOR). Targeted by Sentinel and the OWASP Web lens. (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "sentinel": {
+      "block": true,
+      "location_matches": "^src/routes/orders\\.js:"
+    },
+    "owasp-web": {
+      "block": true,
+      "location_matches": "^src/routes/orders\\.js:"
+    }
+  }
+}
