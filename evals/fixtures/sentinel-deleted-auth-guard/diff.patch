@@ -1,4 +1,4 @@
-diff --git a/src/routes/documents.js b/src/routes/documents.js
+DIFFGIT a/src/routes/documents.js b/src/routes/documents.js
 index c463821..3888de6 100644
 --- a/src/routes/documents.js
 +++ b/src/routes/documents.js

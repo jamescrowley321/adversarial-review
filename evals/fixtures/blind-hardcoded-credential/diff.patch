@@ -1,4 +1,4 @@
-diff --git a/src/integrations/mailer.js b/src/integrations/mailer.js
+DIFFGIT a/src/integrations/mailer.js b/src/integrations/mailer.js
 new file mode 100644
 index 0000000..6aa3201
 --- /dev/null

@@ -76,6 +76,17 @@ for (const id of ids) {
   if (!fx.guards) fail(id, "expected.json needs `guards` — name the incident or failure shape this fixture exists to catch");
   if (!fx.prBody.trim()) fail(id, "pr-body.md is empty");
   if (!/^diff --git /m.test(fx.diff)) fail(id, "diff.patch is not a unified diff");
+
+  // The stored file must carry NO literal "diff --git " — see decodeFixtureDiff.
+  // The review agent's diff filter splits the PR diff on that substring without
+  // anchoring to a line start, so a fixture containing it verbatim leaks its
+  // internal paths into the reviewed diff as phantom files that no ignore
+  // pattern can exclude, and the lenses block on the planted defects.
+  const stored = readFileSync(join(FIXTURES_DIR, id, "diff.patch"), "utf8");
+  if (stored.includes("diff --git ")) {
+    fail(id, 'diff.patch contains a literal "diff --git " — store it as "DIFFGIT " instead, or the lenses will review this fixture\'s planted defects as real code (see decodeFixtureDiff in evals/lib/fixtures.mjs)');
+  }
+  if (!/^DIFFGIT /m.test(stored)) fail(id, 'diff.patch has no "DIFFGIT " header — it is not in the stored encoding');
   for (const e of hunkCountErrors(fx.diff)) fail(id, e);
 
   const lines = newLinesByFile(fx.diff);

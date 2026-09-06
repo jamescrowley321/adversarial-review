@@ -1,4 +1,4 @@
-diff --git a/src/search/useResultNavigation.test.ts b/src/search/useResultNavigation.test.ts
+DIFFGIT a/src/search/useResultNavigation.test.ts b/src/search/useResultNavigation.test.ts
 new file mode 100644
 index 0000000..281eedb
 --- /dev/null
@@ -68,7 +68,7 @@ index 0000000..281eedb
 +    expect(document.activeElement).toBe(input);
 +  });
 +});
-diff --git a/src/search/useResultNavigation.ts b/src/search/useResultNavigation.ts
+DIFFGIT a/src/search/useResultNavigation.ts b/src/search/useResultNavigation.ts
 new file mode 100644
 index 0000000..795089d
 --- /dev/null

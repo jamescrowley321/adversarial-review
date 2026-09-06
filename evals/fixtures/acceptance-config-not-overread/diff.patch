@@ -1,4 +1,4 @@
-diff --git a/.github/workflows/pr.yml b/.github/workflows/pr.yml
+DIFFGIT a/.github/workflows/pr.yml b/.github/workflows/pr.yml
 index 2069b04..a12fa9c 100644
 --- a/.github/workflows/pr.yml
 +++ b/.github/workflows/pr.yml
@@ -14,7 +14,7 @@ index 2069b04..a12fa9c 100644
 +      - run: npm ci
 +      - run: npx playwright install --with-deps chromium
 +      - run: npx playwright test --project=chromium
-diff --git a/playwright.config.ts b/playwright.config.ts
+DIFFGIT a/playwright.config.ts b/playwright.config.ts
 new file mode 100644
 index 0000000..4f81e03
 --- /dev/null

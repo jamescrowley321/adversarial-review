@@ -1,4 +1,4 @@
-diff --git a/src/api/exports.js b/src/api/exports.js
+DIFFGIT a/src/api/exports.js b/src/api/exports.js
 new file mode 100644
 index 0000000..165295b
 --- /dev/null
@@ -30,7 +30,7 @@ index 0000000..165295b
 +});
 +
 +module.exports = router;
-diff --git a/src/api/exports.test.js b/src/api/exports.test.js
+DIFFGIT a/src/api/exports.test.js b/src/api/exports.test.js
 new file mode 100644
 index 0000000..672e81d
 --- /dev/null

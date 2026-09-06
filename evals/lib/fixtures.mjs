@@ -26,13 +26,35 @@ export function listFixtureIds() {
     .sort();
 }
 
+/**
+ * Fixture patches are stored with `DIFFGIT ` where a real patch says
+ * `diff --git `, and decoded here.
+ *
+ * This is not cosmetic. The review agent's diff-fetch filters the PR diff by
+ * splitting it on the SUBSTRING "diff --git " — not line-anchored — and then
+ * matching each chunk's path against the ignore list. A committed `.patch`
+ * file contains that substring on its own content lines, so every inner header
+ * in a fixture splits off a phantom chunk whose path is the fixture's INTERNAL
+ * path (`src/routes/documents.js`), which no ignore pattern can reach.
+ *
+ * The effect: five lenses blocked PR #28 reporting the planted IDOR and the
+ * planted credential as real defects in files this repo does not have, and
+ * `diff_ignore_patterns: evals/fixtures/` could not suppress it — the fixture
+ * FILE was excluded while its CONTENTS leaked through as separate pseudo-files.
+ *
+ * Storing the token in a form that never appears verbatim removes the split
+ * point, so the ignore pattern works as intended. validate-fixtures.mjs
+ * enforces the encoding so it cannot be reintroduced by hand.
+ */
+export const decodeFixtureDiff = (t) => t.replace(/^DIFFGIT /gm, "diff --git ");
+
 export function loadFixture(id) {
   const dir = join(FIXTURES_DIR, id);
   const expected = JSON.parse(readFileSync(join(dir, "expected.json"), "utf8"));
   return {
     id,
     dir,
-    diff: readFileSync(join(dir, "diff.patch"), "utf8"),
+    diff: decodeFixtureDiff(readFileSync(join(dir, "diff.patch"), "utf8")),
     prBody: readFileSync(join(dir, "pr-body.md"), "utf8"),
     ...expected,
   };

@@ -95,6 +95,15 @@ evals/fixtures/<case-name>/
   expected.json
 ```
 
+**`diff.patch` is stored with `DIFFGIT ` where a real patch says `diff --git `.**
+Not cosmetic: the review agent's diff-fetch filters by splitting the PR diff on
+the *substring* `"diff --git "`, unanchored. A committed patch file contains that
+substring on its own content lines, so each inner header splits off a phantom
+chunk whose path is the fixture's *internal* path — which `diff_ignore_patterns`
+can never match. On PR #28 that had five lenses blocking on the planted IDOR and
+credential as though they were real defects in files this repo does not have.
+`validate-fixtures.mjs` enforces the encoding; `loadFixture` decodes it.
+
 ```json
 {
   "class": "must-not-block",
