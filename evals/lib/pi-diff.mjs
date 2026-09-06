@@ -86,6 +86,35 @@ export function truncateDiff(diff, maxLines, maxBytes) {
  * The tool RESULT text, as the agent receives it. The fence and the `PR #n
  * Diff:` header are part of what get_pr_diff returns, so a fetch-path fixture
  * that omits them is not reproducing the fetch path.
+ *
+ * REFUSES rather than escapes. Upstream interpolates the diff into this fence
+ * without escaping it (docs/upstream-issues.md #3), so a diff containing a
+ * fence closes the block early and everything after it reads as prose instead
+ * of quoted tool output. Two ways to handle that, and only one of them is
+ * honest here:
+ *
+ *   - Escaping it would make this function emit a payload the real tool never
+ *     produces. Every fetch fixture would then measure something no lens
+ *     receives, which is the one thing the fetch path exists to avoid.
+ *   - Refusing keeps the contract "reproduce the tool result exactly, or do
+ *     not run at all". A prompt with a broken fence is not a measurement of
+ *     anything, so there is no case where emitting one is the right outcome.
+ *
+ * validate-fixtures.mjs catches this earlier and with a better message. This
+ * check is here so the guarantee belongs to the function rather than to a
+ * caller remembering to validate first — raised by Sentinel on #40, and right:
+ * a check that lives only in the validator is a check that a future caller
+ * silently opts out of.
  */
-export const renderGetPrDiff = (pullNumber, text) =>
-  `PR #${pullNumber} Diff:\n\`\`\`diff\n${text}\n\`\`\``;
+export function renderGetPrDiff(pullNumber, text) {
+  if (String(text).includes("```")) {
+    throw new Error(
+      "renderGetPrDiff: the diff contains a ``` fence. get_pr_diff wraps its result in an " +
+        "unescaped ```diff block (docs/upstream-issues.md #3), so this would close the fence early " +
+        "and the remainder would read as prose rather than quoted tool output. This function will " +
+        "not emit a payload the real tool never produces, and will not escape it either — escaping " +
+        "would make the fixture measure something no lens receives. Fix the fixture.",
+    );
+  }
+  return `PR #${pullNumber} Diff:\n\`\`\`diff\n${text}\n\`\`\``;
+}

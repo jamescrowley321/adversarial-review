@@ -867,10 +867,19 @@ describe("action.yml input defaults", () => {
 // non-security version of the same problem: such a fixture would silently
 // measure fence-breaking rather than truncation.
 describe("fetch fixtures cannot smuggle a fence", () => {
-  test("the port reproduces the unescaped fence, deliberately", () => {
-    const out = renderGetPrDiff(42, "diff --git a/a.md b/a.md\n+```\n+not a fence in a real file");
-    assert.ok(out.startsWith("PR #42 Diff:\n```diff\n"), out.slice(0, 40));
-    assert.ok(out.includes("+```"), "the payload must be reproduced verbatim, not escaped");
+  test("the renderer refuses a fence rather than escaping it", () => {
+    // Not escaped: that would emit a payload the real tool never produces, and
+    // every fetch fixture would measure something no lens receives. Not passed
+    // through either: a broken fence is not a measurement of anything.
+    assert.throws(
+      () => renderGetPrDiff(42, "diff --git a/a.md b/a.md\n+```\n+text"),
+      /will not emit a payload the real tool never produces/,
+    );
+  });
+
+  test("an ordinary diff is reproduced verbatim, fence and header included", () => {
+    const out = renderGetPrDiff(42, "diff --git a/a.ts b/a.ts\n+const a = 1;");
+    assert.equal(out, "PR #42 Diff:\n```diff\ndiff --git a/a.ts b/a.ts\n+const a = 1;\n```");
   });
 
   test("validate-fixtures refuses a fetch fixture whose diff contains a fence", () => {
