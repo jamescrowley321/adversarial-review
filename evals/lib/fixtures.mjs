@@ -30,9 +30,38 @@ const EVAL_REPO = "acme/widget";
  * eval prompt while being present in every real one.
  */
 export function actionInputDefault(name, yml = readFileSync(join(ROOT, "action.yml"), "utf8")) {
-  const m = yml.match(new RegExp(`\\n {2}${name}:\\n(?:[^\\n]*\\n)*? {4}default: '([^']*)'`));
-  if (!m) throw new Error(`action.yml: no default found for input \`${name}\``);
-  return m[1];
+  // Scanned line by line rather than matched with a regex built from `name`.
+  // Two reasons, both raised on the PR that added this: a constructed RegExp
+  // trips Semgrep's detect-non-literal-regexp, and a single pattern over YAML
+  // silently mis-reads anything it did not anticipate — an escaped quote, a
+  // block scalar — which here would mean composing eval prompts around a cap
+  // this action does not actually ship. Every regex below is a literal, and
+  // every shape this cannot read throws instead of guessing.
+  //
+  // A YAML library would be the obvious answer and is not available: this
+  // harness runs with zero npm dependencies so the offline layer works on any
+  // checkout, which is also why it can gate every PR.
+  const lines = yml.split("\n");
+  let i = lines.indexOf(`  ${name}:`);
+  if (i === -1) throw new Error(`action.yml: no input named \`${name}\``);
+
+  for (i += 1; i < lines.length; i++) {
+    // Dedent to column 0-2 means we left this input's block without a default.
+    if (/^ {0,2}\S/.test(lines[i])) break;
+    const m = /^ {4}default: (.*)$/.exec(lines[i]);
+    if (!m) continue;
+    const raw = m[1].trim();
+    if (raw === "|" || raw === ">" || raw.startsWith("|") || raw.startsWith(">")) {
+      throw new Error(
+        `action.yml: input \`${name}\` has a block-scalar default. Read it explicitly ` +
+          `rather than through this helper, which only handles single-line scalars.`,
+      );
+    }
+    if (raw.length >= 2 && raw.startsWith("'") && raw.endsWith("'")) return raw.slice(1, -1).split("''").join("'");
+    if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) return JSON.parse(raw);
+    return raw;
+  }
+  throw new Error(`action.yml: no default found for input \`${name}\``);
 }
 
 /** The diff-acquisition config production runs with, from action.yml's own defaults. */

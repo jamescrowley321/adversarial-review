@@ -15,7 +15,7 @@ import { runParseStep, runGateStep, botReview, agentJsonComment, HEAD_SHA } from
 import { LENS_KEYS, lensName, personaHeading, shippedLensKeys, readPersona, readShared } from "./lib/lenses.mjs";
 import { foldReps, score, violations, THRESHOLDS } from "./lib/scorecard.mjs";
 import { extractStepScript, runNodeScript } from "./lib/action-script.mjs";
-import { composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble } from "./lib/fixtures.mjs";
+import { composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault } from "./lib/fixtures.mjs";
 import { truncateDiff, truncateDiffByBytes, byteMarker } from "./lib/pi-diff.mjs";
 import { ROOT as REPO_ROOT } from "./lib/harness.mjs";
 import { mkdtempSync, readFileSync as rf, rmSync } from "node:fs";
@@ -797,5 +797,47 @@ describe("ported truncation — boundaries", () => {
       assert.ok(!truncateDiffByBytes(uni, maxBytes).text.includes("�"),
         `replacement character produced at maxBytes=${maxBytes}`);
     }
+  });
+});
+
+// Raised on this PR: parsing YAML with one constructed regex is brittle, and
+// the constructed regex itself trips Semgrep's detect-non-literal-regexp. A
+// YAML library is not an option here — this harness carries zero npm
+// dependencies so the offline layer runs on any checkout. The scanner is the
+// middle path: literal regexes only, and it throws on anything it cannot read
+// rather than returning a wrong cap the eval prompts would then state as fact.
+describe("action.yml input defaults", () => {
+  test("reads the shipped single-quoted defaults", () => {
+    assert.equal(actionInputDefault("diff_max_lines"), "2000");
+    assert.equal(actionInputDefault("diff_max_bytes"), "204800");
+  });
+
+  test("a block-scalar default throws instead of returning a fragment", () => {
+    // `loaded_tools` ships a `|` default. The old regex simply did not match
+    // and reported "no default found", which reads as a missing input rather
+    // than an unsupported shape.
+    assert.throws(() => actionInputDefault("loaded_tools"), /block-scalar/);
+  });
+
+  test("an unknown input is distinguishable from a missing default", () => {
+    assert.throws(() => actionInputDefault("not_an_input"), /no input named/);
+  });
+
+  test("an escaped single quote survives", () => {
+    // The shape the regex got wrong: '' inside a single-quoted YAML scalar.
+    const yml = "inputs:\n  demo:\n    required: false\n    default: 'it''s fine'\n  next:\n";
+    assert.equal(actionInputDefault("demo", yml), "it's fine");
+  });
+
+  test("a double-quoted default is unescaped, not returned raw", () => {
+    const yml = 'inputs:\n  demo:\n    required: false\n    default: "a \\"quoted\\" value"\n';
+    assert.equal(actionInputDefault("demo", yml), 'a "quoted" value');
+  });
+
+  test("an input with no default at all throws rather than reading the next input's", () => {
+    // The scan must stop at the dedent. Running on would silently return the
+    // NEXT input's default — a wrong cap stated as fact in every eval prompt.
+    const yml = "inputs:\n  demo:\n    required: true\n  other:\n    default: 'wrong'\n";
+    assert.throws(() => actionInputDefault("demo", yml), /no default found/);
   });
 });
