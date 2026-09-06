@@ -104,11 +104,26 @@ export async function runParseStep({
   issueComments = [], failIssueList = false,
   dismissSuperseded = "false", cleanupAgentComments = "true", agentSuccess = "true", yml = null,
   lensHeading = undefined,
+  repair = "true", repairKey = "test-key", repairResponse = null, repairStatus = 200,
 }) {
   const src = extractStepScript(yml ?? actionYml(), "Parse findings + post review", "script");
   const core = makeCore();
   const github = makeGithub({ files, reviews, reviewComments, issueComments, failIssueList });
+  // Stub the repair call. Recording the request lets a test assert that a
+  // well-formed response never triggers one, and that the call really does ask
+  // the provider to enforce the schema.
+  const repairCalls = [];
+  const fetchStub = async (url, init) => {
+    repairCalls.push({ url, body: JSON.parse(init.body) });
+    return {
+      ok: repairStatus >= 200 && repairStatus < 300,
+      status: repairStatus,
+      text: async () => (typeof repairResponse === "string" ? repairResponse : "upstream error"),
+      json: async () => ({ choices: [{ message: { content: repairResponse ?? "" } }] }),
+    };
+  };
   await runGithubScript(src, {
+    extra: { fetch: fetchStub },
     core, github, context: makeContext(),
     env: {
       LENS_NAME: lensName,
@@ -120,6 +135,10 @@ export async function runParseStep({
       // CI publishes this from the compose step; default to the same value so
       // the evals exercise what production actually passes.
       LENS_HEADING: lensHeading === undefined ? headingForDisplayName(lensName) : lensHeading,
+      REPAIR_MALFORMED: repair,
+      REPAIR_API_KEY: repairKey,
+      REPAIR_MODEL: "test/model",
+      REPAIR_BASE_URL: "https://provider.test/v1",
     },
   });
   const review = github.created[0] || null;
@@ -130,6 +149,7 @@ export async function runParseStep({
     body: review?.body ?? null,
     comments: review?.comments ?? [],
     deletedComments: github.deletedComments,
+    repairCalls,
     blocked: review?.event === "REQUEST_CHANGES",
     core, github,
   };

@@ -447,6 +447,98 @@ describe("agent-comment cleanup", () => {
   });
 });
 
+// ─────────────────── Repairing prose output ───────────────────
+// Three of four lens-job failures in one day were the agent writing a good
+// review as prose and ignoring the output contract. Failing there discards the
+// review and fails the gate closed over formatting. One reformat call, under
+// the provider's strict json_schema, converts the agent's own words — it does
+// not re-review, and it cannot itself answer in prose.
+
+describe("malformed output repair", () => {
+  const good = (lens = "Sentinel", findings = []) => JSON.stringify({ lens, summary: "s", findings });
+
+  test("prose is reformatted and the review posts", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel",
+      agentResponse: "I reviewed the diff. There is a hardcoded key in src/app.js line 2. Otherwise fine.",
+      repairResponse: good("Sentinel", [{ severity: "MUST FIX", location: "src/app.js:2", detail: "hardcoded key", recommendation: "move it to a secret" }]),
+    });
+    assert.equal(r.failed, null);
+    assert.equal(r.event, "REQUEST_CHANGES");
+    assert.equal(r.repairCalls.length, 1);
+  });
+
+  test("the repair call forces the schema at the provider", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: "prose, no json here",
+      repairResponse: good("Sentinel"),
+    });
+    const rf = r.repairCalls[0].body.response_format;
+    assert.equal(rf.type, "json_schema");
+    assert.equal(rf.json_schema.strict, true, "without strict the reformat can itself be prose");
+    assert.deepEqual(rf.json_schema.schema.properties.findings.items.properties.severity.enum,
+      ["MUST FIX", "SHOULD FIX", "NITPICK"]);
+  });
+
+  test("the posted review discloses that the output was reformatted", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: "prose only",
+      repairResponse: good("Sentinel"),
+    });
+    assert.match(r.body, /answered in prose/i);
+    assert.match(r.body, /only their structure changed/i);
+  });
+
+  test("well-formed output never triggers a repair call", async () => {
+    const r = await runParseStep({ lensName: "Sentinel", agentResponse: good("Sentinel") });
+    assert.equal(r.failed, null);
+    assert.deepEqual(r.repairCalls, [], "a valid response must not cost an extra model call");
+  });
+
+  test("malformed JSON is repaired too, not only pure prose", async () => {
+    const bad = '{"lens":"Sentinel","summary":"s","findings":[{"severity":"MUST FIX",' +
+      '"location":"src/a.js:1","detail":"the pattern \\d+ is unanchored","recommendation":"anchor"}]}';
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: bad,
+      repairResponse: good("Sentinel", [{ severity: "NITPICK", location: "src/app.js:2", detail: "d", recommendation: "r" }]),
+    });
+    assert.equal(r.failed, null);
+    assert.equal(r.repairCalls.length, 1);
+  });
+
+  test("repair disabled fails immediately, with no call", async () => {
+    const r = await runParseStep({ lensName: "Sentinel", agentResponse: "prose", repair: "false" });
+    assert.notEqual(r.failed, null);
+    assert.deepEqual(r.repairCalls, []);
+  });
+
+  test("no api key fails rather than calling out unauthenticated", async () => {
+    const r = await runParseStep({ lensName: "Sentinel", agentResponse: "prose", repairKey: "" });
+    assert.notEqual(r.failed, null);
+    assert.deepEqual(r.repairCalls, []);
+  });
+
+  test("a failed repair still surfaces what the agent actually said", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel",
+      agentResponse: "The auth guard on line 40 was removed and that is exploitable.",
+      repairStatus: 500,
+    });
+    assert.notEqual(r.failed, null);
+    assert.match(String(r.failed), /auth guard on line 40/,
+      "a lost review is the real cost of a parse failure — the failure must quote it");
+  });
+
+  test("repair output is still schema-validated by the action", async () => {
+    // A provider that ignores strict mode must not get a free pass.
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: "prose",
+      repairResponse: JSON.stringify({ lens: "Sentinel", summary: "s", findings: [{ severity: "CRITICAL", location: "a:1", detail: "d", recommendation: "r" }] }),
+    });
+    assert.match(String(r.failed), /severity/);
+  });
+});
+
 // ─────────────────── Diff scope disclosure ───────────────────
 // get_pr_diff silently drops every path matching diff_ignore_patterns, so a
 // filtered diff looks identical to a complete one. On #34, 50 of 53 changed
