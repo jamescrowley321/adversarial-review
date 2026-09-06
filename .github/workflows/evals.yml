@@ -28,6 +28,14 @@
 # than the existing hole" is not a reason to add another one, and this repo's
 # own Sentinel and Viper lenses flag it.
 #
+# The offline layer keeps running on pull requests, including forks. It holds
+# no secrets, takes `contents: read`, and discards the checkout credentials, so
+# there is nothing on that runner worth stealing. It does execute PR-authored
+# code — but so does `node --test` on any repo's test suite; an attacker would
+# put the payload in a test file, not in action.yml. That is the documented,
+# intended use of `pull_request` (as opposed to `pull_request_target`), and
+# removing it would mean deleting the regression guards this suite exists for.
+#
 # So the paid layer only ever runs against `main` — code that has already been
 # reviewed and merged. Push to main runs it automatically when a relevant path
 # changed; workflow_dispatch runs it on demand, and REFUSES any ref other than
@@ -73,6 +81,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # verify-guards replays guards against pre-fix history
+          # Do not leave the job's GITHUB_TOKEN in .git/config. This job runs
+          # PR-authored code by design (its whole purpose is to execute the PR's
+          # action.yml and test files), so it should hold nothing worth taking.
+          # History is already fetched by this point; the later git reads are
+          # local and need no credentials.
+          persist-credentials: false
 
       - name: Syntax-check the harness
         run: |
@@ -100,6 +114,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # Every ${{ }} value is bound to an env var and read as "$VAR", never
       # interpolated into the script text.
