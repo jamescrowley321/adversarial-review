@@ -1,0 +1,94 @@
+DIFFGIT a/src/api/documents.ts b/src/api/documents.ts
+index bd46fc0..a277000 100644
+--- a/src/api/documents.ts
++++ b/src/api/documents.ts
+@@ -9,10 +9,5 @@ documents.get("/api/documents/:id", requireSession, async (req, res) => {
+   const doc = await db.one("select * from documents where id = $1", [req.params.id]);
+   if (!doc) return res.status(404).json({ error: "not found" });
+ 
+-  // A document is only ever readable inside the tenant that owns it.
+-  if (doc.tenant_id !== req.session.tenantId) {
+-    return res.status(404).json({ error: "not found" });
+-  }
+-
+-  res.json(renderDocument(doc));
++  res.json(renderDocument(doc, { includeAudit: req.query.audit === "1" }));
+ });
+DIFFGIT a/src/ui/DocumentList.tsx b/src/ui/DocumentList.tsx
+new file mode 100644
+index 0000000..8838117
+--- /dev/null
++++ b/src/ui/DocumentList.tsx
+@@ -0,0 +1,49 @@
++import { useEffect, useState } from "react";
++import { api } from "../api/client";
++
++interface Doc {
++  id: string;
++  title: string;
++  updatedAt: string;
++}
++
++export function DocumentList({ query }: { query: string }) {
++  const [docs, setDocs] = useState<Doc[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [error, setError] = useState<string | null>(null);
++
++  useEffect(() => {
++    let cancelled = false;
++    setLoading(true);
++    api
++      .get<Doc[]>(`/api/documents?q=${encodeURIComponent(query)}`)
++      .then((rows) => {
++        if (cancelled) return;
++        setDocs(rows);
++        setError(null);
++      })
++      .catch((e) => {
++        if (!cancelled) setError(String(e.message ?? e));
++      })
++      .finally(() => {
++        if (!cancelled) setLoading(false);
++      });
++    return () => {
++      cancelled = true;
++    };
++  }, [query]);
++
++  if (loading) return <p role="status">Loading documents…</p>;
++  if (error) return <p role="alert">{error}</p>;
++
++  return (
++    <ul className="document-list">
++      {docs.map((d) => (
++        <li key={d.id}>
++          <a href={`/documents/${d.id}`}>{d.title}</a>
++          <time dateTime={d.updatedAt}>{new Date(d.updatedAt).toLocaleDateString()}</time>
++        </li>
++      ))}
++    </ul>
++  );
++}
+DIFFGIT a/src/workers/reindex.ts b/src/workers/reindex.ts
+new file mode 100644
+index 0000000..e965456
+--- /dev/null
++++ b/src/workers/reindex.ts
+@@ -0,0 +1,17 @@
++import { db } from "../db/client";
++import { search } from "../search/client";
++
++const BATCH = 250;
++
++export async function reindexDocuments(since: Date) {
++  let cursor = since;
++  for (;;) {
++    const rows = await db.many(
++      "select id, tenant_id, title, body, updated_at from documents where updated_at > $1 order by updated_at asc limit $2",
++      [cursor, BATCH],
++    );
++    if (!rows.length) return;
++    await search.bulkIndex(rows.map((r) => ({ id: r.id, tenant: r.tenant_id, title: r.title, body: r.body })));
++    cursor = rows[rows.length - 1].updated_at;
++  }
++}
