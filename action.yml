@@ -279,8 +279,54 @@ runs:
           const t = String(v ?? "").trim();
           return /^[0-9]{1,12}$/.test(t) && Number(t) > 0 ? String(Number(t)) : "";
         };
-        const maxLines = asCount(process.env.MAX_LINES);
-        const maxBytes = asCount(process.env.MAX_BYTES);
+
+        // These must mirror the `default:` of diff_max_lines / diff_max_bytes.
+        // Pinned by a contract test that reads the defaults back out of this
+        // file, so the two cannot drift apart silently.
+        const DEFAULT_MAX_LINES = "2000";
+        const DEFAULT_MAX_BYTES = "204800";
+
+        // A byte cap below this is refused rather than passed on. Two reasons.
+        //
+        // The engine's byte truncation computes `budget = maxBytes - markerLen`
+        // where the marker is "\n... (truncated at N bytes)" (26 + digits). It
+        // does not floor that at zero, so a cap under ~30 makes `budget`
+        // negative, `buf.subarray(0, budget)` takes its from-the-end meaning,
+        // and the tool returns MORE than the cap asked for — the opposite of
+        // the contract. (Reported upstream; see docs/upstream-issues.md.)
+        //
+        // And a cap under 1 KiB cannot hold a single hunk, so any value here is
+        // a misconfiguration whatever the engine does with it.
+        const MIN_MAX_BYTES = 1024;
+
+        // Validate what we PASS, not just what we say. The prompt names these
+        // caps as fact; an unvalidated value would be forwarded to the diff
+        // tool, silently replaced by ITS default, and the sentence the lens
+        // read would be false. A lens taught to distrust the disclosure is
+        // worse off than one never given it.
+        // Empty stays empty: a caller who explicitly clears a cap is opting out
+        // of the disclosure, and this step has never invented one for them.
+        // Only a value that was SUPPLIED and cannot be honoured is replaced.
+        const resolve = (raw, fallback, name, floor) => {
+          const given = String(raw ?? "").trim();
+          if (given === "") return "";
+          const ok = asCount(given);
+          if (!ok) {
+            console.log(`::warning::${name} is not a positive integer; using ${fallback} instead so the prompt and the diff tool agree.`);
+            return fallback;
+          }
+          if (floor && Number(ok) < floor) {
+            console.log(`::warning::${name} ${ok} is below the ${floor}-byte floor — the diff tool's byte budget goes negative under ~30 bytes and it returns MORE than the cap promises, and no hunk fits under 1 KiB. Using ${fallback}.`);
+            return fallback;
+          }
+          return ok;
+        };
+        const effLines = resolve(process.env.MAX_LINES, DEFAULT_MAX_LINES, "diff_max_lines", 0);
+        const effBytes = resolve(process.env.MAX_BYTES, DEFAULT_MAX_BYTES, "diff_max_bytes", MIN_MAX_BYTES);
+        fs.appendFileSync(process.env.GITHUB_ENV, `EFFECTIVE_MAX_LINES=${effLines}\nEFFECTIVE_MAX_BYTES=${effBytes}\n`);
+
+        const maxLines = effLines;
+        const maxBytes = effBytes;
         const limits = (maxLines || maxBytes)
           ? `Diff limits: the diff you fetch is truncated at ` +
             [maxLines && `${maxLines} lines`, maxBytes && `${maxBytes} bytes`].filter(Boolean).join(" and ") +
@@ -344,8 +390,11 @@ runs:
         model: ${{ inputs.model }}
         token: ${{ inputs.api_key }}
         thinking_level: ${{ inputs.thinking_level }}
-        diff_max_lines: ${{ inputs.diff_max_lines }}
-        diff_max_bytes: ${{ inputs.diff_max_bytes }}
+        # The VALIDATED caps from the compose step, not the raw inputs: the
+        # prompt states these numbers as fact, so the tool must be given the
+        # same ones. See the compose step for the floor and why it exists.
+        diff_max_lines: ${{ env.EFFECTIVE_MAX_LINES }}
+        diff_max_bytes: ${{ env.EFFECTIVE_MAX_BYTES }}
         diff_ignore_patterns: ${{ inputs.diff_ignore_patterns }}
         loaded_tools: ${{ inputs.loaded_tools }}
         export_session_html: true
