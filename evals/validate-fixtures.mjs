@@ -10,7 +10,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { listFixtureIds, loadFixture, FIXTURES_DIR } from "./lib/fixtures.mjs";
+import { listFixtureIds, loadFixture, fixtureDiffPayload, FIXTURES_DIR } from "./lib/fixtures.mjs";
 import { LENS_KEYS } from "./lib/lenses.mjs";
 
 const errors = [];
@@ -94,6 +94,48 @@ for (const id of ids) {
     fail(id, "diff has no anchorable new-file lines — the action's post step cannot place an inline comment and fails the lens");
   }
 
+  // ── Fetch-path fixtures ──
+  // `fetch` makes the harness reproduce what get_pr_diff would have returned —
+  // truncation and marker included — instead of feeding the diff inline. Two
+  // things have to hold or the fixture silently stops testing anything: the
+  // truncation must actually fire, and a must-block finding must still be
+  // REACHABLE in what survives the cut.
+  let visible = fx.diff;
+  if (fx.fetch != null) {
+    if (typeof fx.fetch !== "object" || Array.isArray(fx.fetch)) {
+      fail(id, "`fetch` must be an object, e.g. { \"max_lines\": 53 }");
+    } else {
+      for (const k of Object.keys(fx.fetch)) {
+        if (!["max_lines", "max_bytes"].includes(k)) fail(id, `fetch.${k} is not a known key (max_lines, max_bytes)`);
+      }
+      for (const k of ["max_lines", "max_bytes"]) {
+        const v = fx.fetch[k];
+        if (v != null && (!Number.isInteger(v) || v < 1)) fail(id, `fetch.${k} must be a positive integer`);
+      }
+      if (!errors.some((e) => e.startsWith(`[${id}] fetch`))) {
+        const payload = fixtureDiffPayload(fx);
+        if (!payload.truncation?.truncated) {
+          fail(id, "`fetch` is set but the diff is smaller than the caps, so nothing is truncated — the fixture proves nothing about a truncated fetch. Lower max_lines/max_bytes or grow the diff.");
+        }
+        // Fetch mode reproduces get_pr_diff's tool result, and that result wraps
+        // the diff in a ```diff fence WITHOUT escaping it — upstream's
+        // behaviour, reproduced on purpose so a fixture shows a lens what the
+        // real tool would hand it (see docs/upstream-issues.md #3).
+        //
+        // The consequence has to be caught here rather than papered over in the
+        // renderer. A fixture whose diff contains a fence closes the block
+        // early, so everything after it stops reading as quoted tool output —
+        // and the fixture then measures fence-breaking instead of the thing its
+        // name claims, silently. Refusing it keeps the port faithful AND leaves
+        // no way to author that shape by accident.
+        if (/^\s*```/m.test(fx.diff) || fx.diff.includes("```")) {
+          fail(id, "a `fetch` fixture's diff contains a ``` fence. Fetch mode reproduces get_pr_diff's UNESCAPED ```diff wrapper (upstream defect, docs/upstream-issues.md #3), so this diff would close the fence early and the fixture would measure fence-breaking rather than what it claims. Use inline mode, or change the fixture content.");
+        }
+        visible = payload.truncation.text;
+      }
+    }
+  }
+
   const entries = Object.entries(fx.lenses || {});
   if (!entries.length) fail(id, "expected.json has no `lenses` expectations");
   for (const [lensKey, expect] of entries) {
@@ -113,10 +155,13 @@ for (const id of ids) {
     if (expect.location_matches) {
       let re;
       try { re = new RegExp(expect.location_matches); } catch (e) { fail(id, `${lensKey}: location_matches is not a valid regex: ${e.message}`); continue; }
-      // The regex must be satisfiable by some real file:line in this diff.
-      const satisfiable = [...lines.entries()].some(([file, set]) => [...set].some((n) => re.test(`${file}:${n}`)));
+      // The regex must be satisfiable by some real file:line in the diff the
+      // lens actually SEES — which, for a fetch-path fixture, is the truncated
+      // one. A defect below the cut can never be reported.
+      const reachable = newLinesByFile(visible);
+      const satisfiable = [...reachable.entries()].some(([file, set]) => [...set].some((n) => re.test(`${file}:${n}`)));
       if (!satisfiable) {
-        fail(id, `${lensKey}: no file:line in this diff can match /${expect.location_matches}/ — the fixture can never pass. Files in diff: ${[...lines.keys()].join(", ")}`);
+        fail(id, `${lensKey}: no file:line in the diff the lens sees can match /${expect.location_matches}/ — the fixture can never pass${fx.fetch ? " (this fixture truncates the diff; the finding may be below the cut)" : ""}. Files: ${[...reachable.keys()].join(", ")}`);
       }
     }
   }

@@ -23,8 +23,16 @@ export function foldReps(run, reps) {
   const wantBlock = run.expect.block === true;
   // `location_matches` comes from a fixture file committed to this repo and
   // reviewed on the PR that adds it — not user or network input — and this is a
-  // dev-only harness that never runs inside a consumer's action.
-  // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
+  // dev-only harness that never runs inside a consumer's action. The pattern
+  // has to stay a real regex: fixtures anchor on shapes like `docs/a\.md:\d+`.
+  //
+  // Bare `nosemgrep`, not the rule-id form. The id-qualified version was here
+  // first and did NOT suppress — code-scanning alert 24 stayed open across
+  // several analyses of a tree that contained it, because `semgrep scan
+  // --config=auto` reports the registry id while matching the comment against
+  // the local check id. Do not "tidy" this back to the qualified form without
+  // watching the alert close.
+  // nosemgrep
   const locRe = run.expect.location_matches ? new RegExp(run.expect.location_matches) : null;
   const locationOk = !locRe || parsed.some((r) => (r.findings || []).some((f) => locRe.test(String(f.location))));
 

@@ -62,16 +62,26 @@ merge is blocked until the MUST FIX findings are resolved.
 - **The gate** counts only well-formed reviews on the head SHA, keeps the latest
   per lens (so a stale `CHANGES_REQUESTED` from an earlier attempt can't block a
   clean re-run), and **fails closed** if any lens is missing or requested changes.
-- **Security:** the lens agent's tool allowlist is **read-only** (`get_pr_diff`,
-  `get_issue_or_pr_thread`) — it cannot post reviews, run shell, write files, or
-  reach secrets. A successful prompt injection can't exfiltrate the provider key
-  or mutate the repo.
+- **Security:** the lens agent's evidence tools are **read-only** (`get_pr_diff`,
+  `get_issue_or_pr_thread`) — it cannot post reviews, run shell, write repo
+  files, or reach secrets. A successful prompt injection can't exfiltrate the
+  provider key or mutate the repo. The one write it can perform,
+  `submit_findings`, writes a single file under `runner.temp` at a path this
+  action sets and pull request content never touches; the review is still posted
+  by this action via Octokit, not by the agent.
+- **The output contract is enforced, not requested.** A lens delivers its review
+  by *calling* `submit_findings`, whose arguments the provider validates against
+  the schema before the call is delivered — so a review written as prose cannot
+  arrive through that channel. That was the largest single cause of failed lens
+  jobs. The older final-message JSON contract still works and is the documented
+  fallback; set `submit_findings_tool: false` to run message-only.
 
 ## Inputs
 
 | Input | Default | Notes |
 |-------|---------|-------|
 | `mode` | — (required) | `lens` or `gate` |
+| `submit_findings_tool` | `true` | Deliver the review through a schema-checked `submit_findings` tool call instead of the agent's final message. `false` runs message-only. |
 | `lens` | — | Required for `mode: lens`: `blind` \| `edge-case` \| `acceptance` \| `sentinel` \| `viper` \| `compliance` \| `owasp-web` \| `owasp-llm` |
 | `lenses` | `blind,edge-case,acceptance,sentinel,viper` | Gate's expected set — must match the caller matrix |
 | `github_token` | — (required) | `${{ secrets.GITHUB_TOKEN }}`; needs `pull-requests: write` |
