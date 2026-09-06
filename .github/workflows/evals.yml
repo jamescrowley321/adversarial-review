@@ -126,19 +126,43 @@ jobs:
             echo "have=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Run lens evals
+      # Split into three steps on purpose. `compose` and `score` EXECUTE script
+      # text lifted from the pull request's own action.yml; `call` is the only
+      # step that needs the provider key. Keeping them apart means no step ever
+      # holds OPENROUTER_API_KEY while running PR-controlled code, so an edit to
+      # action.yml in a PR has no secret in reach.
+      #
+      # Every ${{ }} value is bound to an env var and read as "$VAR" — never
+      # interpolated into the script text, which would let context data become
+      # shell code (the same rule this action's own lenses enforce on consumers).
+      - name: Compose prompts (no secrets in scope)
         if: steps.key.outputs.have == 'true'
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           EVAL_MODEL: ${{ inputs.model }}
-          EVAL_CONCURRENCY: "4"
+          EVAL_SET: ${{ needs.changes.outputs.set }}
+          EVAL_REPS: ${{ inputs.reps }}
         shell: bash
         run: |
           set -euo pipefail
           args=()
-          [ "${{ needs.changes.outputs.set }}" = "full" ] && args+=(--full)
-          args+=(--reps "${{ inputs.reps || '3' }}")
-          node evals/run.mjs "${args[@]}"
+          # An `[ x ] && y` one-liner here would exit the script under `set -e`
+          # whenever the test is false — i.e. on every smoke run.
+          if [ "${EVAL_SET:-smoke}" = "full" ]; then args+=(--full); fi
+          args+=(--reps "${EVAL_REPS:-3}")
+          node evals/run.mjs --phase compose "${args[@]}"
+
+      - name: Call the model (secret in scope; runs no repo script)
+        if: steps.key.outputs.have == 'true'
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          EVAL_CONCURRENCY: "4"
+        shell: bash
+        run: node evals/run.mjs --phase call
+
+      - name: Score against the action's parser (no secrets in scope)
+        if: steps.key.outputs.have == 'true'
+        shell: bash
+        run: node evals/run.mjs --phase score
 
       - name: Upload scorecard
         if: always() && steps.key.outputs.have == 'true'

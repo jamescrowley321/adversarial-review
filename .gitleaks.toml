@@ -1,0 +1,19 @@
+# Gitleaks configuration: the default ruleset, plus one narrowly-scoped
+# allowlist for the eval fixture corpus.
+#
+# evals/fixtures/*/diff.patch are FROZEN inputs fed to the review lenses. One of
+# them (blind-hardcoded-credential) plants a synthetic SendGrid key on purpose —
+# that is the defect the lens is being measured on. Scanning those files reports
+# the plant on every run, which trains people to ignore this scanner.
+#
+# Scope is deliberately tight: only `diff.patch` directly inside a fixture
+# directory. Fixture metadata, the harness, and the rest of the repo — evals/
+# included — are still fully scanned, so a real secret committed anywhere a
+# person would actually put one is still caught.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Synthetic credentials planted in frozen eval fixtures (evals/README.md)"
+paths = ['''^evals/fixtures/[^/]+/diff\.patch$''']

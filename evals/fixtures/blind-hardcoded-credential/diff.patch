@@ -1,6 +1,6 @@
 diff --git a/src/integrations/mailer.js b/src/integrations/mailer.js
 new file mode 100644
-index 0000000..c6d5acc
+index 0000000..6aa3201
 --- /dev/null
 +++ b/src/integrations/mailer.js
 @@ -0,0 +1,29 @@
@@ -8,7 +8,7 @@ index 0000000..c6d5acc
 +
 +const fetch = require("node-fetch");
 +
-+const SENDGRID_KEY = "SG.4kZq0Xj7RJmL9pQb2vT8ug.aQ1sWd3eRf5tGh7jKl9zXc2vBn4mQ6wE8rT0yU";
++const SENDGRID_KEY = "SG.EXAMPLE-NOT-A-REAL-KEY.eval-fixture-placeholder-do-not-use";
 +const ENDPOINT = "https://api.sendgrid.com/v3/mail/send";
 +
 +async function sendReceipt(user, order) {

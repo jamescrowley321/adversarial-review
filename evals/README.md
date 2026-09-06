@@ -34,6 +34,23 @@ node evals/run.mjs --write-baseline   # record the scorecard and always exit 0
 
 `--dry-run` with `EVAL_PRINT_PROMPT=1` prints the exact prompt a lens receives.
 
+### Phases, and why CI splits them
+
+`run.mjs` runs in three phases (`--phase`, default `all`):
+
+| Phase | Does | Needs the key? | Executes PR-controlled `action.yml` script? |
+|---|---|---|---|
+| `compose` | fixtures → the action's compose step → prompt files | no | **yes** |
+| `call` | prompt files → model → response files | **yes** | no |
+| `score` | response files → the action's findings parser → scorecard | no | **yes** |
+
+Locally `all` runs them back to back. CI runs them as three separate steps on
+purpose: the harness deliberately executes script text lifted from the pull
+request's own `action.yml`, so no step should hold `OPENROUTER_API_KEY` while
+doing it. Splitting them means a malicious edit to `action.yml` in a PR has no
+secret within reach. It also makes runs re-scorable without re-spending — fix a
+scoring bug and re-run `--phase score` over the responses you already paid for.
+
 The model defaults to whatever `action.yml` ships as its `model` default, so a
 scorecard describes the configuration consumers actually run. It is recorded in
 the report: a lens score is meaningless without it, and this repo has already
@@ -128,6 +145,22 @@ nothing.
 The model-behaviour incidents cannot be replayed from git — the artifact that
 failed was a model response, not code — so they live in `fixtures/` and are
 measured, not proved.
+
+## Fixtures contain deliberate defects
+
+`evals/fixtures/*/diff.patch` are a vulnerable-code corpus: a deleted
+tenant-ownership guard, a hardcoded credential, an unimplemented acceptance
+criterion. That is the point — a suite of only clean fixtures scores a lens that
+never blocks anything as perfect.
+
+Two consequences worth knowing:
+
+- The planted credential is written to be obviously non-functional
+  (`SG.EXAMPLE-NOT-A-REAL-KEY.…`). A lens should still flag it — it is a
+  credential hardcoded in source — but it is not a realistic-entropy key, so it
+  neither trips secret scanners nor sets a precedent for committing one.
+- `.gitleaks.toml` allowlists `evals/fixtures/*/diff.patch` and nothing else.
+  Every other path in the repo, `evals/` included, is still scanned.
 
 ## Known gaps
 

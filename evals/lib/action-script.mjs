@@ -34,7 +34,7 @@ export function extractStepScript(actionYml, stepName, key = "script") {
   for (let i = stepIdx + 1; i < lines.length; i++) {
     const l = lines[i];
     if (l.trim() && l.search(/\S/) <= stepIndent && /^\s*- /.test(l)) break;
-    if (new RegExp(`^\\s*${key}:\\s*\\|\\s*$`).test(l)) { keyIdx = i; break; }
+    if (l.trim() === `${key}: |`) { keyIdx = i; break; }
   }
   if (keyIdx === -1) throw new Error(`step "${stepName}" has no \`${key}: |\` block`);
 

@@ -13,6 +13,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { runParseStep, runGateStep, botReview, HEAD_SHA } from "./lib/harness.mjs";
 import { LENS_KEYS, lensName, personaHeading, shippedLensKeys, readPersona, readShared } from "./lib/lenses.mjs";
+import { foldReps, score, violations, THRESHOLDS } from "./lib/scorecard.mjs";
 
 const j = (o) => JSON.stringify(o);
 const finding = (over = {}) => ({
@@ -293,6 +294,70 @@ describe("merge gate", () => {
     }
     const gate = await runGateStep({ expected: shippedLensKeys().map(lensName), reviews });
     assert.equal(gate.passed, true);
+  });
+});
+
+// ───────────────────────── Scoring policy ─────────────────────────
+// The exit policy is what turns a scorecard into a gate. It gets its own
+// offline coverage so a scoring regression cannot quietly make every run green.
+
+describe("scoring policy", () => {
+  const run = (over = {}) => ({
+    id: "fx", lensKey: "acceptance",
+    fx: { class: "must-not-block", guards: "g" },
+    expect: { block: false },
+    ...over,
+  });
+  const rep = (blocked, over = {}) => ({ parsed: true, blocked, findings: [], ...over });
+
+  test("a must-not-block fixture that never blocks passes", () => {
+    const r = foldReps(run(), [rep(false), rep(false), rep(false)]);
+    assert.equal(r.pass, true);
+    assert.deepEqual(violations(score([r]), THRESHOLDS), []);
+  });
+
+  test("a must-not-block fixture that blocks even once is a false positive", () => {
+    const r = foldReps(run(), [rep(false), rep(true), rep(false)]);
+    assert.equal(r.pass, false);
+    const vs = violations(score([r]), THRESHOLDS);
+    assert.equal(vs.length >= 1, true);
+    assert.match(vs.join(" "), /FALSE POSITIVE/);
+  });
+
+  test("a split verdict is flagged instability, not a pass", () => {
+    const mustBlock = run({ fx: { class: "must-block", guards: "g" }, expect: { block: true } });
+    const r = foldReps(mustBlock, [rep(true), rep(false), rep(true)]);
+    assert.equal(r.pass, false);
+    assert.match(r.reason, /unstable/);
+  });
+
+  test("a must-block fixture that blocks for the wrong file does not pass", () => {
+    const mustBlock = run({
+      fx: { class: "must-block", guards: "g" },
+      expect: { block: true, location_matches: "^src/auth\\.js:" },
+    });
+    const wrong = [0, 1, 2].map(() => rep(true, { findings: [{ severity: "MUST FIX", location: "README.md:1", detail: "d" }] }));
+    assert.equal(foldReps(mustBlock, wrong).pass, false);
+    const right = [0, 1, 2].map(() => rep(true, { findings: [{ severity: "MUST FIX", location: "src/auth.js:9", detail: "d" }] }));
+    assert.equal(foldReps(mustBlock, right).pass, true);
+  });
+
+  test("truncation is reported as a harness limit, never as lens quality", () => {
+    const reps = [rep(false), { parsed: false, truncated: true, blocked: null, findings: [] }, rep(false)];
+    const r = foldReps(run(), reps);
+    assert.equal(r.pass, false);
+    assert.match(r.reason, /HARNESS limit/);
+    assert.match(violations(score([r]), THRESHOLDS).join(" "), /truncated/);
+    assert.doesNotMatch(violations(score([r]), THRESHOLDS).join(" "), /JSON validity/);
+  });
+
+  test("recall below threshold is a violation", () => {
+    const mk = (pass) => foldReps(
+      run({ id: pass ? "a" : "b", fx: { class: "must-block", guards: "g" }, expect: { block: true } }),
+      [rep(pass), rep(pass), rep(pass)],
+    );
+    const vs = violations(score([mk(true), mk(false), mk(false)]), THRESHOLDS);
+    assert.match(vs.join(" "), /must-block recall/);
   });
 });
 

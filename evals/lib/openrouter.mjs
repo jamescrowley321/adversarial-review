@@ -17,7 +17,12 @@ export class ModelError extends Error {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function chat({ model, prompt, temperature = 0, maxTokens = 2000, attempts = 3, timeoutMs = 180_000 }) {
+// maxTokens must comfortably cover BOTH the reply and any reasoning tokens the
+// model spends getting there. Reasoning models bill thinking against the same
+// budget, so a tight cap returns an empty or half-written JSON object — which
+// then reads as "the lens emitted invalid JSON" when it is really the harness
+// cutting the model off. Truncation is reported separately for that reason.
+export async function chat({ model, prompt, temperature = 0, maxTokens = 8000, attempts = 3, timeoutMs = 180_000 }) {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new ModelError("OPENROUTER_API_KEY is not set — the live eval layer cannot run.");
 
@@ -56,9 +61,11 @@ export async function chat({ model, prompt, temperature = 0, maxTokens = 2000, a
       let body;
       try { body = JSON.parse(text); } catch { throw new ModelError(`non-JSON response: ${text.slice(0, 200)}`, { retryable: true }); }
       if (body.error) throw new ModelError(`OpenRouter error: ${body.error.message || JSON.stringify(body.error)}`, { retryable: true });
-      const content = body.choices?.[0]?.message?.content ?? "";
+      const choice = body.choices?.[0] ?? {};
+      const content = choice.message?.content ?? "";
       return {
         text: typeof content === "string" ? content : JSON.stringify(content),
+        finishReason: choice.finish_reason ?? choice.native_finish_reason ?? null,
         usage: body.usage || null,
         servedBy: body.provider || null,
         resolvedModel: body.model || model,

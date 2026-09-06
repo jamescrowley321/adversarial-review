@@ -13,19 +13,26 @@ export const THRESHOLDS = {
 /** Fold reps for one (fixture, lens) into a single result. */
 export function foldReps(run, reps) {
   const parsed = reps.filter((r) => r.parsed);
+  const truncated = reps.filter((r) => r.truncated).length;
   const verdicts = parsed.map((r) => r.blocked);
   const unanimous = verdicts.length > 0 && verdicts.every((v) => v === verdicts[0]);
   const everBlocked = verdicts.some((v) => v === true);
   const alwaysBlocked = verdicts.length > 0 && verdicts.every((v) => v === true);
 
   const wantBlock = run.expect.block === true;
+  // `location_matches` comes from a fixture file committed to this repo and
+  // reviewed on the PR that adds it — not user or network input — and this is a
+  // dev-only harness that never runs inside a consumer's action.
+  // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
   const locRe = run.expect.location_matches ? new RegExp(run.expect.location_matches) : null;
   const locationOk = !locRe || parsed.some((r) => (r.findings || []).some((f) => locRe.test(String(f.location))));
 
   let pass, reason;
   if (parsed.length !== reps.length) {
     pass = false;
-    reason = `${reps.length - parsed.length}/${reps.length} rep(s) produced output the action could not accept`;
+    reason = truncated
+      ? `${truncated}/${reps.length} rep(s) hit the max-tokens ceiling — a HARNESS limit, not a lens failure. Re-run with --max-tokens higher before reading anything into this row.`
+      : `${reps.length - parsed.length}/${reps.length} rep(s) produced output the action could not accept`;
   } else if (!unanimous) {
     pass = false;
     reason = `unstable verdict across reps (${verdicts.map((v) => (v ? "BLOCK" : "pass")).join(", ")}) — not a pass`;
@@ -46,7 +53,7 @@ export function foldReps(run, reps) {
   return {
     id: run.id, lens: run.lensKey, class: run.fx.class, guards: run.fx.guards,
     expectBlock: wantBlock, verdicts, unanimous, everBlocked, alwaysBlocked,
-    locationOk, jsonValid: parsed.length, reps: reps.length, pass, reason,
+    locationOk, jsonValid: parsed.length, reps: reps.length, truncated, pass, reason,
     severities: tally(parsed.flatMap((r) => (r.findings || []).map((f) => f.severity))),
     reps_detail: reps,
   };
@@ -57,10 +64,11 @@ const tally = (xs) => xs.reduce((m, x) => ((m[x] = (m[x] || 0) + 1), m), {});
 export function score(results) {
   const byLens = {};
   for (const r of results) {
-    const l = (byLens[r.lens] ||= { lens: r.lens, mustBlock: [], mustNotBlock: [], jsonValid: 0, repsTotal: 0, unstable: 0 });
+    const l = (byLens[r.lens] ||= { lens: r.lens, mustBlock: [], mustNotBlock: [], jsonValid: 0, repsTotal: 0, unstable: 0, truncated: 0 });
     (r.class === "must-block" ? l.mustBlock : l.mustNotBlock).push(r);
     l.jsonValid += r.jsonValid;
     l.repsTotal += r.reps;
+    l.truncated += r.truncated || 0;
     if (!r.unanimous) l.unstable++;
   }
   for (const l of Object.values(byLens)) {
@@ -83,7 +91,9 @@ export function violations(byLens, thresholds = THRESHOLDS) {
     if (l.recall != null && l.recall < thresholds.mustBlockRecall) {
       out.push(`${l.lens}: must-block recall ${pct(l.recall)} < ${pct(thresholds.mustBlockRecall)}`);
     }
-    if (l.jsonValidityRate != null && l.jsonValidityRate < thresholds.jsonValidity) {
+    if (l.truncated) {
+      out.push(`${l.lens}: ${l.truncated} rep(s) truncated at the max-tokens ceiling — harness limit; raise --max-tokens and re-run, do not read this as lens quality`);
+    } else if (l.jsonValidityRate != null && l.jsonValidityRate < thresholds.jsonValidity) {
       out.push(`${l.lens}: JSON validity ${pct(l.jsonValidityRate)} < ${pct(thresholds.jsonValidity)}`);
     }
   }
@@ -98,6 +108,7 @@ export function renderScorecard({ byLens, results, meta, violations: vs }) {
   L.push("# Lens eval scorecard", "");
   L.push(`- **Model:** \`${meta.model}\`${meta.resolvedModel && meta.resolvedModel !== meta.model ? ` (resolved: \`${meta.resolvedModel}\`)` : ""}`);
   L.push(`- **Reps per fixture:** ${meta.reps} (a verdict must be unanimous to count as a pass)`);
+  L.push(`- **Max tokens:** ${meta.maxTokens ?? "default"}`);
   L.push(`- **Fixtures:** ${meta.fixtureCount} · **runs:** ${results.length} · **model calls:** ${results.length * meta.reps}`);
   L.push(`- **Action ref:** \`${meta.ref || "working tree"}\``);
   L.push(`- **Result:** ${vs.length ? `❌ ${vs.length} violation(s)` : "✅ within thresholds"}`);
@@ -134,7 +145,7 @@ export function renderScorecard({ byLens, results, meta, violations: vs }) {
       L.push(`- Severities across reps: ${JSON.stringify(r.severities)}`);
       for (const [i, rep] of r.reps_detail.entries()) {
         if (rep.error) { L.push(`- rep ${i}: ERROR — ${rep.error}`); continue; }
-        if (!rep.parsed) { L.push(`- rep ${i}: unparseable — ${rep.parseError}`); continue; }
+        if (!rep.parsed) { L.push(`- rep ${i}: unparseable (finish_reason=${rep.finishReason ?? "?"}${rep.truncated ? ", TRUNCATED by the harness" : ""}) — ${rep.parseError}`); continue; }
         for (const f of rep.findings || []) {
           if (f.severity !== "MUST FIX" && !r.expectBlock) continue;
           L.push(`- rep ${i}: [${f.severity}] \`${f.location}\` — ${String(f.detail).replace(/\s+/g, " ").slice(0, 400)}`);
