@@ -896,3 +896,139 @@ describe("fetch fixtures cannot smuggle a fence", () => {
     }
   });
 });
+
+// ───────────────────── submit_findings (the tool channel) ─────────────────────
+// The message channel is enforced by asking. Five lens jobs died on that in the
+// field — three writing a good review as prose, one on an illegal JSON escape,
+// one emitting an object with no `lens`. A tool call's arguments are checked by
+// the provider before the call is delivered, so prose cannot arrive that way.
+// These pin the action's half of that: which channel wins, what still gets
+// validated, and what happens when the tool did not run.
+
+describe("submit_findings channel", () => {
+  const review = (over = {}) => ({ lens: "Edge Case Hunter", summary: "s", findings: [], ...over });
+
+  test("a submitted review is posted, and an empty final message is not a failure", async () => {
+    // Once the review arrives by tool call, models often reply with nothing.
+    // Treating that as "the agent produced no output" would fail every lens.
+    const r = await runParseStep({ lensName: "Edge Case Hunter", agentResponse: "", submitted: review() });
+    assert.equal(r.failed, null);
+    assert.equal(r.posted, true);
+    assert.equal(r.event, "COMMENT");
+  });
+
+  test("the message channel still works when the tool never ran", async () => {
+    const r = await runParseStep({ lensName: "Edge Case Hunter", agentResponse: emit("Edge Case Hunter") });
+    assert.equal(r.failed, null);
+    assert.equal(r.posted, true);
+  });
+
+  test("a submitted review wins over a conflicting final message", async () => {
+    // The tool call is the reviewed, schema-checked artifact; a leftover message
+    // is whatever the model happened to say afterwards.
+    const r = await runParseStep({
+      lensName: "Edge Case Hunter",
+      agentResponse: emit("Edge Case Hunter", [finding({ detail: "from the message" })]),
+      submitted: review({ findings: [finding({ detail: "from the tool call" })] }),
+    });
+    assert.match(r.body, /from the tool call/);
+    assert.doesNotMatch(r.body, /from the message/);
+  });
+
+  test("prose in the final message is irrelevant once the review was submitted", async () => {
+    // The exact shape that killed three lens jobs in one day.
+    const r = await runParseStep({
+      lensName: "Edge Case Hunter",
+      agentResponse: "I reviewed the diff and found one issue with the retry path.",
+      submitted: review({ findings: [finding({ severity: "SHOULD FIX" })] }),
+    });
+    assert.equal(r.failed, null);
+    assert.equal(r.posted, true);
+  });
+
+  test("a submitted review is still schema-validated, not trusted", async () => {
+    // The file is written by a tool this action ships, but the parse step must
+    // not become a hole that skips the checks the message path gets.
+    const wrongLens = await runParseStep({ lensName: "Edge Case Hunter", agentResponse: "", submitted: review({ lens: "Sentinel" }) });
+    assert.match(String(wrongLens.failed), /emitted lens="Sentinel"/);
+
+    const badSeverity = await runParseStep({
+      lensName: "Edge Case Hunter", agentResponse: "",
+      submitted: review({ findings: [finding({ severity: "CRITICAL" })] }),
+    });
+    assert.match(String(badSeverity.failed), /not in \{MUST FIX, SHOULD FIX, NITPICK\}/);
+
+    const noFindings = await runParseStep({ lensName: "Edge Case Hunter", agentResponse: "", submitted: { lens: "Edge Case Hunter", summary: "s" } });
+    assert.match(String(noFindings.failed), /missing or non-array/);
+  });
+
+  test("a MUST FIX submitted by tool call still blocks", async () => {
+    const r = await runParseStep({
+      lensName: "Edge Case Hunter", agentResponse: "",
+      submitted: review({ findings: [finding({ severity: "MUST FIX" })] }),
+    });
+    assert.equal(r.blocked, true);
+    assert.equal(r.event, "REQUEST_CHANGES");
+  });
+
+  test("a corrupt findings file falls back to the message instead of failing", async () => {
+    // A half-written file must cost fidelity, never the review.
+    const r = await runParseStep({
+      lensName: "Edge Case Hunter",
+      agentResponse: emit("Edge Case Hunter", [finding({ detail: "recovered from the message" })]),
+      submitted: '{"lens": "Edge Case Hunter", "summary": "s", "findings": [',
+    });
+    assert.equal(r.failed, null);
+    assert.match(r.body, /recovered from the message/);
+    assert.ok(r.core.warnings.some((w) => /could not read/.test(w)), "the fallback should be reported, not silent");
+  });
+
+  test("no tool, no message is still a hard failure", async () => {
+    const r = await runParseStep({ lensName: "Edge Case Hunter", agentResponse: "" });
+    assert.match(String(r.failed), /agent produced no output/);
+  });
+});
+
+describe("submit_findings tool allowlist", () => {
+  const composeTools = async (env) => {
+    const src = extractStepScript(rf(pjoin(REPO_ROOT, "action.yml"), "utf8"), "Compose lens prompt", "run");
+    const dir = mkdtempSync(pjoin(tmpdir(), "adv-tools-"));
+    const envFile = pjoin(dir, "github_env");
+    try {
+      await runNodeScript(src, {
+        env: { ACTION_PATH: REPO_ROOT, LENS_KEY: "acceptance", PR: "7", REPO: "acme/widget", GITHUB_ENV: envFile, ...env },
+      });
+      const m = rf(envFile, "utf8").match(/(?:^|\n)EFFECTIVE_LOADED_TOOLS<<(\S+)\n([\s\S]*?)\n\1\n/);
+      return m ? m[2] : null;
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  };
+
+  test("submit_findings is appended to the shipped read-only allowlist", async () => {
+    const tools = await composeTools({ LOADED_TOOLS: "get_pr_diff\nget_issue_or_pr_thread", SUBMIT_TOOL: "true" });
+    assert.deepEqual(tools.split("\n"), ["get_pr_diff", "get_issue_or_pr_thread", "submit_findings"]);
+  });
+
+  test("it is appended to a narrowed allowlist too, not only the default", async () => {
+    // A consumer who restricts loaded_tools must not silently lose the channel.
+    const tools = await composeTools({ LOADED_TOOLS: "get_pr_diff", SUBMIT_TOOL: "true" });
+    assert.deepEqual(tools.split("\n"), ["get_pr_diff", "submit_findings"]);
+  });
+
+  test("`all` is passed through untouched", async () => {
+    // `all` is a sentinel, not a list. Appending to it names a tool that
+    // does not exist, and an unknown name fails the run early.
+    assert.equal(await composeTools({ LOADED_TOOLS: "all", SUBMIT_TOOL: "true" }), "all");
+  });
+
+  test("disabling the tool leaves the allowlist alone", async () => {
+    // Naming a tool that was never registered fails the run before the review
+    // starts — strictly worse than the message channel it replaces.
+    const tools = await composeTools({ LOADED_TOOLS: "get_pr_diff\nget_issue_or_pr_thread", SUBMIT_TOOL: "false" });
+    assert.deepEqual(tools.split("\n"), ["get_pr_diff", "get_issue_or_pr_thread"]);
+  });
+
+  test("it is never listed twice", async () => {
+    const tools = await composeTools({ LOADED_TOOLS: "get_pr_diff\nsubmit_findings", SUBMIT_TOOL: "true" });
+    assert.deepEqual(tools.split("\n"), ["get_pr_diff", "submit_findings"]);
+  });
+});

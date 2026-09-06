@@ -6,8 +6,9 @@
 // actually stops a merge — the review `event` a lens posts, and the gate verdict
 // that event produces.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { extractStepScript, runGithubScript } from "./action-script.mjs";
 
 export const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
@@ -103,25 +104,36 @@ export async function runParseStep({
   lensName, agentResponse, files = defaultFiles(), reviews = [], reviewComments = [],
   issueComments = [], failIssueList = false,
   dismissSuperseded = "false", cleanupAgentComments = "true", agentSuccess = "true", yml = null,
-  lensHeading = undefined,
+  lensHeading = undefined, submitted = undefined,
 }) {
   const src = extractStepScript(yml ?? actionYml(), "Parse findings + post review", "script");
   const core = makeCore();
   const github = makeGithub({ files, reviews, reviewComments, issueComments, failIssueList });
-  await runGithubScript(src, {
-    core, github, context: makeContext(),
-    env: {
-      LENS_NAME: lensName,
-      PR_NUMBER: String(PR_NUMBER),
-      AGENT_RESPONSE: agentResponse,
-      AGENT_SUCCESS: agentSuccess,
-      DISMISS_SUPERSEDED: dismissSuperseded,
-      CLEANUP_AGENT_COMMENTS: cleanupAgentComments,
-      // CI publishes this from the compose step; default to the same value so
-      // the evals exercise what production actually passes.
-      LENS_HEADING: lensHeading === undefined ? headingForDisplayName(lensName) : lensHeading,
-    },
-  });
+  // `submitted` stands in for the file submit_findings writes. A string is
+  // written verbatim (so a corrupt file can be exercised); an object is
+  // serialised. `undefined` means the tool never ran — the message-only path.
+  const dir = submitted === undefined ? null : mkdtempSync(join(tmpdir(), "adv-submit-"));
+  const findingsPath = dir ? join(dir, "adversarial-findings.json") : "";
+  if (dir) writeFileSync(findingsPath, typeof submitted === "string" ? submitted : JSON.stringify(submitted, null, 2));
+  try {
+    await runGithubScript(src, {
+      core, github, context: makeContext(),
+      env: {
+        LENS_NAME: lensName,
+        PR_NUMBER: String(PR_NUMBER),
+        AGENT_RESPONSE: agentResponse,
+        AGENT_SUCCESS: agentSuccess,
+        DISMISS_SUPERSEDED: dismissSuperseded,
+        CLEANUP_AGENT_COMMENTS: cleanupAgentComments,
+        FINDINGS_PATH: findingsPath,
+        // CI publishes this from the compose step; default to the same value so
+        // the evals exercise what production actually passes.
+        LENS_HEADING: lensHeading === undefined ? headingForDisplayName(lensName) : lensHeading,
+      },
+    });
+  } finally {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  }
   const review = github.created[0] || null;
   return {
     failed: core.failed,
