@@ -94,8 +94,15 @@ nothing. Both failure modes have happened here.
 | `owasp-web` | 1 / 1 |
 | `owasp-llm` | 1 / 1 |
 
-Two behaviours get their own treatment:
+Three behaviours get their own treatment:
 
+- **Truncation.** `get_pr_diff` cuts a large diff at `diff_max_lines` /
+  `diff_max_bytes` and appends its own marker. The prompt discloses those caps
+  (#36), but a lens that is *told* about a limit and a lens that *behaves* when
+  it hits one are different claims, and only the first was ever tested. The two
+  `truncation-*` fixtures use the fetch path below to put a lens in front of a
+  genuinely truncated diff — one where the evidence for an AC is below the cut,
+  one where a real defect is above it.
 - **Activation gates.** `viper` and `owasp-llm` are supposed to emit `[]` and
   stop when the diff has no surface they cover. `max_findings: 0` asserts that.
   "Did not block" is not enough — a lens that skips but still files NITPICKs
@@ -155,6 +162,7 @@ credential as though they were real defects in files this repo does not have.
   to (e.g. it is about the PR body).
 - `max_findings` — optional. `0` asserts an activation gate fired: the lens
   emitted nothing at all. Cannot be combined with `block: true`.
+- `fetch` — optional. Switches the fixture to the **fetch path**; see below.
 
 Then run `node evals/validate-fixtures.mjs`. It checks the diff's hunk headers
 against its body, that the diff has anchorable lines, that every lens key is one
@@ -168,6 +176,50 @@ git init /tmp/fx && cd /tmp/fx
 # write the "before" state, commit, write the "after" state
 git add -A && git diff --cached -U3 > diff.patch
 ```
+
+## The fetch path
+
+By default a fixture's diff is fed to the lens inline, and the preamble says so:
+the diff below is complete, there is nothing left to fetch. True for almost every
+fixture, and it keeps the prompt honest.
+
+It is false for exactly the case that matters most. In production the lens calls
+`get_pr_diff`, and on a large PR that tool returns a *cut* diff with a marker
+appended — `... (truncated at 2000 lines, 3855 more)`. A harness that always
+hands over a complete diff can never measure what a lens does at that boundary,
+which is the suspected trigger for the worst incident in this repo's history.
+
+A fixture opts into the fetch path with `fetch`:
+
+```json
+"fetch": { "max_lines": 53 }
+```
+
+What changes:
+
+- The fixture's diff is run through `evals/lib/pi-diff.mjs` — a port of the
+  agent action's own truncation, pinned to the SHA `action.yml` uses — and the
+  payload becomes the **tool result**, `PR #42 Diff:` header, ```` ```diff ````
+  fence and truncation marker included.
+- The **same caps** are passed to the compose step, so the limit the prompt
+  discloses is the limit that was applied. Production's invariant; a fixture
+  that broke it would teach the lens to distrust the disclosure.
+- The preamble drops its completeness claim — and says nothing about
+  truncation either. In production the marker is the only signal, so it is the
+  only signal here. Announcing the cut would measure instruction-following
+  rather than whether the lens notices the boundary.
+
+`diff.patch` still stores the **whole** diff: the hunk arithmetic stays
+checkable, the truncation stays reproducible, and the cap is the only thing you
+tune. `validate-fixtures.mjs` refuses a `fetch` block that does not actually
+truncate anything, and checks a must-block fixture's `location_matches` against
+what survives the cut rather than the full diff — a defect below the cut can
+never be reported.
+
+Both classes are represented, deliberately. Teaching a lens that "the diff was
+truncated" means "lower the severity and move on" would buy the false-positive
+fix with a missed-defect regression, and `truncation-head-defect-must-block` is
+what makes that trade visible.
 
 ## Fixtures ported from production incidents
 
@@ -257,6 +309,16 @@ failures` block so the behaviour is described rather than rediscovered.
   client retries these, and if they survive retries the scorecard reports them
   as *provider errors*, excluded from the JSON-validity denominator. A bad
   minute upstream must never read as a lens that emits invalid output.
+- **The live layer composed a prompt production never sends.** Until the fetch
+  path landed, `composeFromAction` left `IGNORED_PATHS`, `MAX_LINES` and
+  `MAX_BYTES` unset, so the `Diff scope:` and `Diff limits:` paragraphs were
+  absent from every prompt the paid layer ever sent — while being present in
+  every real run, because all three inputs ship defaults. The offline tests
+  proved the compose step *could* emit them and passed throughout; nothing
+  proved a scored prompt *did*. A prompt-fidelity gap is invisible by
+  construction, so both paragraphs now have an assertion in `composeFromAction`
+  and a contract test over the composed prompt.
+
 - **Illegal JSON escapes fail a lens outright.** Seen on PR #28: Viper quoted a
   regex in `detail`, wrote a lone backslash, and the job died with `Bad escaped
   character in JSON`. The action fails loud and asks for a re-run rather than
