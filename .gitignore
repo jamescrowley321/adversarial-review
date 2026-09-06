@@ -11,3 +11,8 @@ node_modules/
 
 # Eval harness scratch: composed prompts and raw model responses.
 evals/.work/
+
+# Scorecards are produced per run and uploaded as a CI artifact. A copy
+# committed here goes stale the moment a fixture is added, and a stale
+# baseline is worse than none.
+evals/baseline/

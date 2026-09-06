@@ -266,10 +266,16 @@ failures` block so the behaviour is described rather than rediscovered.
   Whether the parser should repair common bad escapes is a live question; the
   test asserts today's behaviour so a change to it is deliberate and visible.
 
-## Recorded baseline
+## Where the baseline lives
 
-`evals/baseline/` holds the last scorecard committed to the repo. Treat it as
-the number a prompt change is measured against, not as a target to hit.
+`evals/baseline/` is written by a run and is **git-ignored**. The record is the
+`lens-eval-scorecard-*` artifact on the `Evals` workflow run for the merge you
+care about — a copy committed to the repo goes stale the moment a fixture is
+added, and a stale baseline is worse than none. (The one that shipped in #28
+said 6 fixtures while `main` had 29.)
+
+Treat a scorecard as the number a prompt change is measured against, not a
+target to hit.
 
 ## Ground rules
 

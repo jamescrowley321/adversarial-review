@@ -180,6 +180,8 @@ runs:
         PR: ${{ steps.ctx.outputs.pr_number }}
         REPO: ${{ github.repository }}
         IGNORED_PATHS: ${{ inputs.diff_ignore_patterns }}
+        MAX_LINES: ${{ inputs.diff_max_lines }}
+        MAX_BYTES: ${{ inputs.diff_max_bytes }}
       run: |
         const fs = require("fs");
         const path = require("path");
@@ -244,7 +246,16 @@ runs:
         // were under an ignored path, and four lenses blocked the PR claiming
         // the work was absent. Naming the exclusions converts a false "it is
         // missing" into a correct "I was not shown it".
-        const ignored = (process.env.IGNORED_PATHS || "").trim().split(/\s+/).filter(Boolean);
+        // Inputs are workflow-author controlled, but a caller can wire one to a
+        // templated expression fed by PR content, so nothing goes into the
+        // prompt unvalidated. Patterns are whitespace-split (so no token carries
+        // a newline) and then bounded in size and count; anything odd is dropped
+        // rather than rendered.
+        const ignored = (process.env.IGNORED_PATHS || "")
+          .trim()
+          .split(/\s+/)
+          .filter((t) => t && t.length <= 200 && !/[`\r\n]/.test(t))
+          .slice(0, 50);
         const scope = ignored.length
           ? `Diff scope: paths matching ${ignored.map((p) => `\`${p}\``).join(", ")} are ` +
             `withheld from the diff you fetch. Files under them are NOT part of your ` +
@@ -254,7 +265,34 @@ runs:
             `file as missing, unimplemented, or absent.\n\n`
           : "";
 
-        let prompt = target + scope + personaText.split("__PR_NUMBER__").join(process.env.PR) + "\n";
+        // Same failure as the withheld paths above, in its more dangerous form:
+        // get_pr_diff truncates at these limits and the agent cannot tell a
+        // truncated diff from a complete one. Every incident where a lens
+        // reported present code as "entirely absent" is consistent with this —
+        // the worst of them was a 5,855-insertion PR against a 2,000-line cap.
+        // Naming the limits lets the agent recognise the boundary and say its
+        // evidence ran out instead of concluding the work was never done.
+        // These two are integers. Validate rather than pass through: a caller
+        // that derives them from PR content would otherwise splice attacker text
+        // straight into the prompt. A non-integer is dropped.
+        const asCount = (v) => {
+          const t = String(v ?? "").trim();
+          return /^[0-9]{1,12}$/.test(t) && Number(t) > 0 ? String(Number(t)) : "";
+        };
+        const maxLines = asCount(process.env.MAX_LINES);
+        const maxBytes = asCount(process.env.MAX_BYTES);
+        const limits = (maxLines || maxBytes)
+          ? `Diff limits: the diff you fetch is truncated at ` +
+            [maxLines && `${maxLines} lines`, maxBytes && `${maxBytes} bytes`].filter(Boolean).join(" and ") +
+            `. A large pull request WILL be cut off. If the diff ends abruptly, or a ` +
+            `file you expected is absent, or a hunk stops mid-change, assume you are ` +
+            `looking at a truncated diff and NOT at a complete change. Absence of code ` +
+            `in a truncated diff is not evidence that the code is missing — say your ` +
+            `evidence was incomplete, name what you could not see, and do not raise a ` +
+            `blocking finding on it.\n\n`
+          : "";
+
+        let prompt = target + scope + limits + personaText.split("__PR_NUMBER__").join(process.env.PR) + "\n";
 
         // Publish the persona's H1 for the parse step. Models routinely echo the
         // heading, or just its subtitle, instead of the primary lens name — that
