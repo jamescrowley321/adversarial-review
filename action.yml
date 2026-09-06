@@ -93,6 +93,11 @@ inputs:
     description: "PR number to review. Defaults to the triggering pull_request."
     required: false
     default: ''
+  cleanup_agent_comments:
+    description: "mode=lens: when true (default), the lens deletes the raw JSON comment the pi agent action posts on the PR as a side effect of running. That comment is the agent's final message verbatim — the same findings this action re-posts as a rendered `## <Lens>` review — so it is a duplicate, it is unreadable, and nothing cleans it up: one accumulates per lens per push (8 lenses x 7 pushes = 56 on one PR). Deletion is safe because the content is losslessly reproduced in the review this step posts. Set to false to keep them."
+    required: false
+    default: 'true'
+
   dismiss_superseded:
     description: "mode=lens: when true (default), once the new review lands the lens dismisses its OWN prior reviews from earlier commits and collapses their inline comments as OUTDATED, so re-runs on new pushes do not pile up stale noise. Set to false to keep every historical review. Best-effort and cosmetic; needs pull-requests write (already required to post)."
     required: false
@@ -261,6 +266,7 @@ runs:
         AGENT_RESPONSE: ${{ steps.pi.outputs.response }}
         AGENT_SUCCESS: ${{ steps.pi.outputs.success }}
         DISMISS_SUPERSEDED: ${{ inputs.dismiss_superseded }}
+        CLEANUP_AGENT_COMMENTS: ${{ inputs.cleanup_agent_comments }}
       with:
         script: |
           const fs = require("fs");
@@ -337,10 +343,6 @@ runs:
             "owasp web top 10 — application security lens": "owasp web top 10",
             "owasp genai/llm top 10 — ai application security lens": "owasp llm top 10",
           };
-          const rawEmittedNorm = norm(emittedLens);
-          const emittedNorm = Object.prototype.hasOwnProperty.call(aliases, rawEmittedNorm)
-            ? aliases[rawEmittedNorm]
-            : rawEmittedNorm;
           const expectedNorm = norm(lensName);
           // Tolerant match (the explicit `aliases` map above only catches subtitles
           // seen verbatim before — e.g. Gemini emits "Sentinel — Security Review
@@ -349,14 +351,23 @@ runs:
           // name, or when either name contains the other. The lens keys are
           // distinct enough (blind/edge-case/acceptance/sentinel/viper/compliance/
           // owasp-*) that containment cannot cross-match one persona to another.
+          //
+          // Named, because step 8 below reuses it to identify THIS lens's stray
+          // agent comment. Two copies of this rule would drift, and a drifted
+          // copy would delete another lens's comment.
           const primary = (s) => s.split(/\s*[—–:|]\s*|\s+-\s+/)[0].trim();
-          const lensOk = !!emittedLens && (
-            emittedNorm === expectedNorm ||
-            primary(emittedNorm) === expectedNorm ||
-            emittedNorm.includes(expectedNorm) ||
-            expectedNorm.includes(emittedNorm)
-          );
-          if (!lensOk) {
+          const matchesThisLens = (name) => {
+            const raw = norm(String(name || "").trim());
+            if (!raw) return false;
+            const n = Object.prototype.hasOwnProperty.call(aliases, raw) ? aliases[raw] : raw;
+            return (
+              n === expectedNorm ||
+              primary(n) === expectedNorm ||
+              n.includes(expectedNorm) ||
+              expectedNorm.includes(n)
+            );
+          };
+          if (!matchesThisLens(emittedLens)) {
             return fail(`agent emitted lens="${emittedLens}" but this job is "${lensName}". Re-run this job to retry.`);
           }
           const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
@@ -566,6 +577,55 @@ runs:
               }
             } catch (e) {
               core.warning(`Reconcile step failed (non-fatal): ${e.message}`);
+            }
+          }
+
+          // ── 8. Delete the agent action's own raw-JSON PR comment. ──
+          //    The pi action posts the agent's final message as a top-level PR
+          //    comment whenever it has PR context; it has no input to disable
+          //    that (checked through v2.27.1). So every lens run leaves a
+          //    ```json block on the PR that duplicates the review this step just
+          //    rendered, and nothing ever collapses it — `dismiss_superseded`
+          //    only reaches reviews and their INLINE comments. They accumulate
+          //    per lens per push and drown the actual review.
+          //
+          //    Deleting is lossless: the same findings are in the `## <Lens>`
+          //    review body above. Matching is deliberately narrow — bot-authored,
+          //    parses as a JSON object, has a `findings` array, and its `lens`
+          //    resolves to THIS lens by the same check used above — so a human
+          //    comment, or another lens's comment, is never touched.
+          //    Best-effort: a failure here never fails the lens.
+          const rawCleanup = String(process.env.CLEANUP_AGENT_COMMENTS ?? "true").trim().toLowerCase();
+          if (new Set(["true", "1", "yes", "on"]).has(rawCleanup)) {
+            try {
+              const issueComments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number: prNumber, per_page: 100,
+              });
+              let deleted = 0;
+              let budget = 100; // bound the API calls per job, like the minimize sweep
+              for (const c of issueComments) {
+                if (budget <= 0) { core.warning(`Hit the agent-comment cleanup cap (100) for "${lensName}" — leaving the rest for the next run.`); break; }
+                if (!isBot(c)) continue;
+                const body = String(c.body || "");
+                // Cheap reject before parsing: the agent's message is JSON, and
+                // an ordinary human or bot comment is not.
+                if (!/^\s*(```(?:json)?)?\s*\{/.test(body)) continue;
+                let obj = null;
+                try { obj = JSON.parse(body.replace(/```(?:json)?/gi, "").trim()); } catch (_) { continue; }
+                if (!obj || typeof obj !== "object" || !Array.isArray(obj.findings)) continue;
+                const claimed = String(obj.lens || "").trim();
+                if (!claimed || !matchesThisLens(claimed)) continue;
+                budget--;
+                try {
+                  await github.rest.issues.deleteComment({ owner, repo, comment_id: c.id });
+                  deleted++;
+                } catch (e) {
+                  core.info(`  could not delete agent comment ${c.id}: ${e.message}`);
+                }
+              }
+              if (deleted) core.info(`Removed ${deleted} duplicate raw-JSON agent comment(s) for "${lensName}".`);
+            } catch (e) {
+              core.warning(`Agent-comment cleanup failed (non-fatal): ${e.message}`);
             }
           }
 

@@ -46,15 +46,16 @@ export function makeContext({ headSha = HEAD_SHA } = {}) {
  * Reviews created during the run are appended, so the post step's own
  * "did it land on head?" verification sees them — exactly as in production.
  */
-export function makeGithub({ files = [], reviews = [], reviewComments = [] } = {}) {
+export function makeGithub({ files = [], reviews = [], reviewComments = [], issueComments = [], failIssueList = false } = {}) {
   const created = [];
   const dismissed = [];
   const minimized = [];
+  const deletedComments = [];
   const state = { reviews: [...reviews] };
   let nextId = 9000;
 
   const gh = {
-    created, dismissed, minimized, state,
+    created, dismissed, minimized, deletedComments, state,
     paginate: async (fn, params) => fn(params).then((r) => r.data),
     graphql: async (_q, vars) => { minimized.push(vars.id); return { minimizeComment: { minimizedComment: { isMinimized: true } } }; },
     rest: {
@@ -80,6 +81,13 @@ export function makeGithub({ files = [], reviews = [], reviewComments = [] } = {
           return { data: {} };
         },
       },
+      issues: {
+        listComments: async () => {
+          if (failIssueList) throw new Error("simulated listComments failure");
+          return { data: issueComments };
+        },
+        deleteComment: async (p) => { deletedComments.push(p.comment_id); return { data: {} }; },
+      },
       checks: { listForRef: async () => ({ data: [] }) },
     },
   };
@@ -93,11 +101,12 @@ export function makeGithub({ files = [], reviews = [], reviewComments = [] } = {
  */
 export async function runParseStep({
   lensName, agentResponse, files = defaultFiles(), reviews = [], reviewComments = [],
-  dismissSuperseded = "false", agentSuccess = "true", yml = null,
+  issueComments = [], failIssueList = false,
+  dismissSuperseded = "false", cleanupAgentComments = "true", agentSuccess = "true", yml = null,
 }) {
   const src = extractStepScript(yml ?? actionYml(), "Parse findings + post review", "script");
   const core = makeCore();
-  const github = makeGithub({ files, reviews, reviewComments });
+  const github = makeGithub({ files, reviews, reviewComments, issueComments, failIssueList });
   await runGithubScript(src, {
     core, github, context: makeContext(),
     env: {
@@ -106,6 +115,7 @@ export async function runParseStep({
       AGENT_RESPONSE: agentResponse,
       AGENT_SUCCESS: agentSuccess,
       DISMISS_SUPERSEDED: dismissSuperseded,
+      CLEANUP_AGENT_COMMENTS: cleanupAgentComments,
     },
   });
   const review = github.created[0] || null;
@@ -115,6 +125,7 @@ export async function runParseStep({
     event: review?.event ?? null,
     body: review?.body ?? null,
     comments: review?.comments ?? [],
+    deletedComments: github.deletedComments,
     blocked: review?.event === "REQUEST_CHANGES",
     core, github,
   };
@@ -175,4 +186,14 @@ export function parseReviewBody(body) {
     if (m) out.push({ severity: m[1], location: m[2], detail: m[3] });
   }
   return out;
+}
+
+/** A top-level PR comment as the pi agent action leaves it: the raw JSON reply. */
+export function agentJsonComment({ lens, id = 500, findings = [], bot = true, fenced = false, body = null }) {
+  const json = JSON.stringify({ lens, summary: "s", findings }, null, 2);
+  return {
+    id,
+    user: { login: bot ? "github-actions[bot]" : "a-person" },
+    body: body ?? (fenced ? "```json\n" + json + "\n```" : json),
+  };
 }

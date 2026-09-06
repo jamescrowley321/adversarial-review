@@ -11,7 +11,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { runParseStep, runGateStep, botReview, HEAD_SHA } from "./lib/harness.mjs";
+import { runParseStep, runGateStep, botReview, agentJsonComment, HEAD_SHA } from "./lib/harness.mjs";
 import { LENS_KEYS, lensName, personaHeading, shippedLensKeys, readPersona, readShared } from "./lib/lenses.mjs";
 import { foldReps, score, violations, THRESHOLDS } from "./lib/scorecard.mjs";
 
@@ -294,6 +294,110 @@ describe("merge gate", () => {
     }
     const gate = await runGateStep({ expected: shippedLensKeys().map(lensName), reviews });
     assert.equal(gate.passed, true);
+  });
+});
+
+// ──────────────── Agent-comment cleanup (duplicate JSON on the PR) ────────────────
+// The pi agent action posts the agent's final message as a top-level PR comment
+// and offers no way to turn that off (checked through v2.27.1). One accumulates
+// per lens per push — 8 lenses x 7 pushes left 56 unreadable ```json blocks on
+// PR #28 — and dismiss_superseded never reaches them: it only touches reviews
+// and their INLINE comments. Step 8 of the post step deletes this lens's own.
+// These tests exist because the matching has to be narrow: deleting the wrong
+// comment is unrecoverable.
+
+describe("agent-comment cleanup", () => {
+  const ok = (lens) => JSON.stringify({ lens, summary: "s", findings: [] });
+
+  test("deletes this lens's own raw-JSON agent comment", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: ok("Sentinel"),
+      issueComments: [agentJsonComment({ lens: "Sentinel", id: 501 })],
+    });
+    assert.equal(r.failed, null);
+    assert.deepEqual(r.deletedComments, [501]);
+  });
+
+  test("deletes it when the agent fenced the JSON", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: ok("Sentinel"),
+      issueComments: [agentJsonComment({ lens: "Sentinel", id: 502, fenced: true })],
+    });
+    assert.deepEqual(r.deletedComments, [502]);
+  });
+
+  test("deletes one emitted under a persona alias", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: ok("Sentinel"),
+      issueComments: [agentJsonComment({ lens: "Security Auditor", id: 503 })],
+    });
+    assert.deepEqual(r.deletedComments, [503]);
+  });
+
+  test("does NOT delete another lens's comment", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: ok("Sentinel"),
+      issueComments: [agentJsonComment({ lens: "Viper", id: 504 })],
+    });
+    assert.deepEqual(r.deletedComments, []);
+  });
+
+  test("does NOT delete a human comment, even one that is pure JSON", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: ok("Sentinel"),
+      issueComments: [agentJsonComment({ lens: "Sentinel", id: 505, bot: false })],
+    });
+    assert.deepEqual(r.deletedComments, []);
+  });
+
+  test("does NOT delete bot JSON without a findings array", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: ok("Sentinel"),
+      issueComments: [{ id: 506, user: { login: "github-actions[bot]" }, body: '{"lens":"Sentinel","note":"not a review"}' }],
+    });
+    assert.deepEqual(r.deletedComments, []);
+  });
+
+  test("does NOT delete ordinary prose comments", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: ok("Sentinel"),
+      issueComments: [
+        { id: 507, user: { login: "github-actions[bot]" }, body: "Deployed to staging." },
+        { id: 508, user: { login: "a-person" }, body: "Looks good to me." },
+      ],
+    });
+    assert.deepEqual(r.deletedComments, []);
+  });
+
+  test("cleanup_agent_comments=false keeps them", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: ok("Sentinel"),
+      issueComments: [agentJsonComment({ lens: "Sentinel", id: 509 })],
+      cleanupAgentComments: "false",
+    });
+    assert.deepEqual(r.deletedComments, []);
+  });
+
+  test("a cleanup failure never fails the lens", async () => {
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: ok("Sentinel"),
+      issueComments: [agentJsonComment({ lens: "Sentinel" })],
+      failIssueList: true,
+    });
+    assert.equal(r.failed, null, "cleanup is cosmetic — it must never block a review from landing");
+    assert.equal(r.posted, true);
+  });
+
+  test("cleanup runs only after the review has been posted", async () => {
+    // If the agent output is rejected, the step returns before step 8. The
+    // duplicate must survive, or a failed lens would erase the only record of
+    // what the agent actually said.
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: "not json at all",
+      issueComments: [agentJsonComment({ lens: "Sentinel", id: 510 })],
+    });
+    assert.notEqual(r.failed, null);
+    assert.deepEqual(r.deletedComments, []);
   });
 });
 
