@@ -1,0 +1,152 @@
+# Lens evals — measure the reviewers, not just the code they review.
+#
+# Two layers, deliberately split by cost:
+#
+#   contract  — offline, deterministic, free. Runs on EVERY pull request. Drives
+#               action.yml's own findings parser and merge gate over recorded
+#               inputs, so a regression in lens-name validation, JSON tolerance,
+#               severity handling or gate adjudication fails here in seconds.
+#   live      — model in the loop. Runs only on PRs that touch the lens prompts
+#               or the action, because it costs money. Smoke set by default; the
+#               full set on workflow_dispatch or the `evals:full` label.
+
+name: Evals
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      set:
+        description: "Fixture set to run"
+        type: choice
+        options: [smoke, full]
+        default: full
+      model:
+        description: "Model to evaluate (pinned; recorded in the scorecard)"
+        type: string
+        default: ""
+      reps:
+        description: "Repetitions per fixture (a verdict must be unanimous to pass)"
+        type: string
+        default: "3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Free, deterministic, every PR. ──
+  contract:
+    name: Contract evals (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # verify-guards replays guards against pre-fix history
+
+      - name: Syntax-check the harness
+        run: |
+          set -euo pipefail
+          for f in evals/*.mjs evals/lib/*.mjs; do node --check "$f"; done
+
+      - name: Validate fixtures
+        run: node evals/validate-fixtures.mjs
+
+      - name: Verify the regression guards are load-bearing
+        run: node evals/verify-guards.mjs
+
+      - name: Contract evals
+        run: node --test evals/contract.test.mjs
+
+  # ── Paid, model in the loop, scoped to changes that can move lens behaviour. ──
+  changes:
+    name: Decide whether live evals are needed
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      set: ${{ steps.decide.outputs.set }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          DISPATCH_SET: ${{ inputs.set }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "run=true"  >> "$GITHUB_OUTPUT"
+            echo "set=${DISPATCH_SET:-full}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "set=smoke" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # A change to a lens prompt, the action, or the harness itself can move
+          # lens behaviour. Anything else (docs, unrelated workflows) cannot.
+          changed=$(git diff --name-only "$BASE" "$HEAD" || true)
+          echo "Changed files:"; echo "$changed" | sed 's/^/  /'
+          if echo "$changed" | grep -qE '^(lenses/|action\.yml$|evals/)'; then run=true; else run=false; fi
+          case ",$LABELS," in *,evals:full,*) run=true; set=full ;; *) set=smoke ;; esac
+          echo "run=$run"  >> "$GITHUB_OUTPUT"
+          echo "set=$set"  >> "$GITHUB_OUTPUT"
+
+  live:
+    name: Live evals (${{ needs.changes.outputs.set }} set)
+    needs: [contract, changes]
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check the provider key is available
+        id: key
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        shell: bash
+        run: |
+          if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+            echo "::warning::OPENROUTER_API_KEY is not available (fork PR?) — skipping the live eval layer. The offline contract evals still ran."
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run lens evals
+        if: steps.key.outputs.have == 'true'
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          EVAL_MODEL: ${{ inputs.model }}
+          EVAL_CONCURRENCY: "4"
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          [ "${{ needs.changes.outputs.set }}" = "full" ] && args+=(--full)
+          args+=(--reps "${{ inputs.reps || '3' }}")
+          node evals/run.mjs "${args[@]}"
+
+      - name: Upload scorecard
+        if: always() && steps.key.outputs.have == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lens-eval-scorecard-${{ github.run_id }}
+          path: |
+            evals/baseline/scorecard.md
+            evals/baseline/baseline.json
+          retention-days: 30
+          if-no-files-found: warn

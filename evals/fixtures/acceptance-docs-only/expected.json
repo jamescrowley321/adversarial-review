@@ -1,0 +1,9 @@
+{
+  "class": "must-not-block",
+  "smoke": true,
+  "pr_title": "docs: expand the on-call runbook",
+  "guards": "Incident 2 — the Acceptance Auditor failed acceptance criteria on a docs PR. lenses/acceptance.md is explicit: 'If the PR body contains no acceptance criteria, say so explicitly and report nothing further (do not invent ACs, do not block).' This body has no ACs.",
+  "lenses": {
+    "acceptance": { "block": false }
+  }
+}

@@ -1,0 +1,106 @@
+diff --git a/src/search/useResultNavigation.test.ts b/src/search/useResultNavigation.test.ts
+new file mode 100644
+index 0000000..df6b80b
+--- /dev/null
++++ b/src/search/useResultNavigation.test.ts
+@@ -0,0 +1,45 @@
++import { renderHook, act } from "@testing-library/react";
++import { useResultNavigation } from "./useResultNavigation";
++
++const results = [
++  { id: "a", href: "/a", label: "A" },
++  { id: "b", href: "/b", label: "B" },
++];
++
++const press = (key: string) =>
++  Object.assign(new KeyboardEvent("keydown", { key }), { preventDefault: () => {} }) as unknown as KeyboardEvent;
++
++describe("useResultNavigation", () => {
++  it("ArrowDown advances the highlight and wraps at the end", () => {
++    const { result } = renderHook(() => useResultNavigation(results, () => {}));
++    act(() => result.current.onKeyDown(press("ArrowDown")));
++    expect(result.current.index).toBe(1);
++    act(() => result.current.onKeyDown(press("ArrowDown")));
++    expect(result.current.index).toBe(0);
++  });
++
++  it("ArrowUp moves back and wraps at the start", () => {
++    const { result } = renderHook(() => useResultNavigation(results, () => {}));
++    act(() => result.current.onKeyDown(press("ArrowUp")));
++    expect(result.current.index).toBe(1);
++  });
++
++  it("Enter navigates to the highlighted result's href", () => {
++    const assign = jest.fn();
++    Object.defineProperty(window, "location", { value: { assign }, writable: true });
++    const { result } = renderHook(() => useResultNavigation(results, () => {}));
++    act(() => result.current.onKeyDown(press("Enter")));
++    expect(assign).toHaveBeenCalledWith("/a");
++  });
++
++  it("Escape closes the dropdown and returns focus to the input", () => {
++    const input = document.createElement("input");
++    input.id = "search-input";
++    document.body.appendChild(input);
++    const onClose = jest.fn();
++    const { result } = renderHook(() => useResultNavigation(results, onClose));
++    act(() => result.current.onKeyDown(press("Escape")));
++    expect(onClose).toHaveBeenCalled();
++    expect(document.activeElement).toBe(input);
++  });
++});
+diff --git a/src/search/useResultNavigation.ts b/src/search/useResultNavigation.ts
+new file mode 100644
+index 0000000..795089d
+--- /dev/null
++++ b/src/search/useResultNavigation.ts
+@@ -0,0 +1,49 @@
++import { useCallback, useState } from "react";
++
++export interface Result {
++  id: string;
++  href: string;
++  label: string;
++}
++
++/**
++ * Keyboard navigation for the search-results dropdown.
++ * ArrowDown/ArrowUp move the highlight (wrapping at both ends),
++ * Enter navigates to the highlighted result, Escape closes and restores focus.
++ */
++export function useResultNavigation(results: Result[], onClose: () => void) {
++  const [index, setIndex] = useState(0);
++
++  const onKeyDown = useCallback(
++    (event: KeyboardEvent) => {
++      if (results.length === 0) return;
++
++      switch (event.key) {
++        case "ArrowDown":
++          event.preventDefault();
++          setIndex((i) => (i + 1) % results.length);
++          return;
++        case "ArrowUp":
++          event.preventDefault();
++          setIndex((i) => (i - 1 + results.length) % results.length);
++          return;
++        case "Enter": {
++          event.preventDefault();
++          const target = results[index];
++          if (target) window.location.assign(target.href);
++          return;
++        }
++        case "Escape":
++          event.preventDefault();
++          onClose();
++          document.getElementById("search-input")?.focus();
++          return;
++        default:
++          return;
++      }
++    },
++    [results, index, onClose],
++  );
++
++  return { index, onKeyDown };
++}

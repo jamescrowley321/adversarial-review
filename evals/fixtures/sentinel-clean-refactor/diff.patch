@@ -1,0 +1,38 @@
+diff --git a/src/pricing.js b/src/pricing.js
+index fc9b884..a8094ed 100644
+--- a/src/pricing.js
++++ b/src/pricing.js
+@@ -1,20 +1,21 @@
+ "use strict";
+ 
++const BASE_BY_PLAN = Object.freeze({
++  starter: 10,
++  team: 25,
++  enterprise: 60,
++});
++
++const VOLUME_DISCOUNT_SEATS = 50;
++const VOLUME_DISCOUNT_RATE = 0.9;
++
+ function priceFor(plan, seats) {
+-  let base;
+-  if (plan === "starter") {
+-    base = 10;
+-  } else if (plan === "team") {
+-    base = 25;
+-  } else if (plan === "enterprise") {
+-    base = 60;
+-  } else {
++  const base = BASE_BY_PLAN[plan];
++  if (base === undefined) {
+     throw new Error(`unknown plan: ${plan}`);
+   }
+-  let total = base * seats;
+-  if (seats >= 50) {
+-    total = total * 0.9;
+-  }
++  const gross = base * seats;
++  const total = seats >= VOLUME_DISCOUNT_SEATS ? gross * VOLUME_DISCOUNT_RATE : gross;
+   return Math.round(total * 100) / 100;
+ }
+ 

@@ -1,0 +1,9 @@
+{
+  "class": "must-block",
+  "smoke": true,
+  "pr_title": "feat(api): CSV export endpoints",
+  "guards": "Counterweight to the acceptance must-not-block set. AC-3 (7-day purge) is implemented nowhere in the diff and has no test, so AC-4 fails with it. If suppressing the false-absence failures ever costs the lens a genuinely absent AC, it shows up here.",
+  "lenses": {
+    "acceptance": { "block": true, "location_matches": "^src/api/exports\\.(js|test\\.js):" }
+  }
+}

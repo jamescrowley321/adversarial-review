@@ -1,0 +1,9 @@
+{
+  "class": "must-not-block",
+  "smoke": true,
+  "pr_title": "ci: add a Chromium-only Playwright lane to the PR workflow",
+  "guards": "Incident 1b — the Acceptance Auditor asserted 'the Playwright config requires Chromium, Firefox and WebKit' against a config declaring only chromium. The AC here requires Chromium ONLY and the config matches it; inventing a requirement the PR never stated is the failure being guarded.",
+  "lenses": {
+    "acceptance": { "block": false }
+  }
+}
