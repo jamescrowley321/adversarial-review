@@ -84,11 +84,15 @@ inputs:
     required: false
     default: 'dist/ build/ node_modules/ pnpm-lock.yaml package-lock.json yarn.lock uv.lock poetry.lock go.sum Cargo.lock'
   loaded_tools:
-    description: "Newline-separated allowlist of pi tools the lens agent may use. Default is READ-ONLY (fetch diff, fetch thread) — the agent does NOT post the review; it emits findings as JSON and the action posts the review deterministically via Octokit. No shell, file-write, push, or PR-write tool, so a successful prompt injection can't exfiltrate the provider key or mutate the repo. Broaden at your own risk (OWASP LLM01)."
+    description: "Newline-separated allowlist of pi tools the lens agent may use. Default is READ-ONLY (fetch diff, fetch thread) — the agent does NOT post the review; the action posts it deterministically via Octokit. No shell, file-write, push, or PR-write tool, so a successful prompt injection can't exfiltrate the provider key or mutate the repo. When submit_findings_tool is true, `submit_findings` is appended to whatever you set here: it writes one file under runner.temp and reaches nothing else, so the read-only boundary is unchanged. Broaden at your own risk (OWASP LLM01)."
     required: false
     default: |
       get_pr_diff
       get_issue_or_pr_thread
+  submit_findings_tool:
+    description: "mode=lens: when true (default), the lens delivers its review by CALLING a `submit_findings` tool whose arguments are the findings schema, instead of ending its message in that shape. The provider validates a tool call's arguments before delivering it, so prose cannot arrive through that channel — which is the single largest source of failed lens jobs (a good review written as prose, or JSON with one bad escape, fails the gate closed on a formatting problem). The final-message contract remains valid and is still the documented fallback. Set to false to run message-only; the tool is then neither loaded nor named in the allowlist."
+    required: false
+    default: 'true'
   pr_number:
     description: "PR number to review. Defaults to the triggering pull_request."
     required: false
@@ -182,6 +186,8 @@ runs:
         IGNORED_PATHS: ${{ inputs.diff_ignore_patterns }}
         MAX_LINES: ${{ inputs.diff_max_lines }}
         MAX_BYTES: ${{ inputs.diff_max_bytes }}
+        LOADED_TOOLS: ${{ inputs.loaded_tools }}
+        SUBMIT_TOOL: ${{ inputs.submit_findings_tool }}
       run: |
         const fs = require("fs");
         const path = require("path");
@@ -316,6 +322,30 @@ runs:
         const delim = "ADV_REVIEW_PROMPT_EOF";
         fs.appendFileSync(process.env.GITHUB_ENV, `COMPOSED_PROMPT<<${delim}\n${prompt}\n${delim}\n`);
 
+        // Publish the tool allowlist the pi step will actually use.
+        //
+        // `submit_findings` has to be NAMED in loaded_tools or the allowlist
+        // excludes it and the whole point is lost — but naming a tool that was
+        // never registered fails the run early, so it may only be appended when
+        // the extension is actually being loaded. Computed here rather than
+        // baked into the input default, because a consumer who narrows
+        // loaded_tools would otherwise silently lose the channel.
+        //
+        // `all` is passed through untouched: it is a sentinel, not a list, and
+        // appending to it produces a name no tool has.
+        const toolsIn = String(process.env.LOADED_TOOLS ?? "").trim();
+        const wantTool = String(process.env.SUBMIT_TOOL ?? "true").trim().toLowerCase() === "true";
+        let effectiveTools = toolsIn;
+        if (wantTool && toolsIn !== "all") {
+          const names = toolsIn.split(/\r?\n/).map((t) => t.trim()).filter(Boolean);
+          if (!names.includes("submit_findings")) names.push("submit_findings");
+          effectiveTools = names.join("\n");
+        }
+        fs.appendFileSync(
+          process.env.GITHUB_ENV,
+          `EFFECTIVE_LOADED_TOOLS<<ADV_TOOLS_EOF\n${effectiveTools}\nADV_TOOLS_EOF\n`,
+        );
+
     # ── Write pi's models.json so per-model OpenRouter routing guardrails (ZDR,
     #    price-sort, precision, maker-ignore) are enforced on the provider request,
     #    not just at the account level. Validation + filesystem logic lives in
@@ -347,15 +377,28 @@ runs:
         diff_max_lines: ${{ inputs.diff_max_lines }}
         diff_max_bytes: ${{ inputs.diff_max_bytes }}
         diff_ignore_patterns: ${{ inputs.diff_ignore_patterns }}
-        loaded_tools: ${{ inputs.loaded_tools }}
+        loaded_tools: ${{ env.EFFECTIVE_LOADED_TOOLS }}
+        extensions: ${{ inputs.submit_findings_tool == 'true' && format('{0}/extensions/submit-findings.ts', github.action_path) || '' }}
         export_session_html: true
         prompt: ${{ env.COMPOSED_PROMPT }}
+      env:
+        # Where submit_findings writes the review. Set from runner.temp by this
+        # action and never from pull request content, so the tool has no
+        # attacker-reachable write target. One file, one job, one runner.
+        ADVERSARIAL_FINDINGS_PATH: ${{ runner.temp }}/adversarial-findings.json
 
-    # ── Parse the agent's JSON findings, render the `## <Lens>` review body, and
-    #    POST it via Octokit. The agent never touches the GitHub write API — it
-    #    only emits JSON in its final message (steps.pi.outputs.response). This
-    #    step is deterministic: a flaky/empty model output fails THIS lens job
-    #    loudly (attributably) so a human re-runs it. No automatic retry. ──
+    # ── Parse the agent's findings, render the `## <Lens>` review body, and POST
+    #    it via Octokit. The agent never touches the GitHub write API.
+    #
+    #    Two channels, in order. The lens normally delivers its review by calling
+    #    `submit_findings`, whose arguments the provider validated against the
+    #    schema before the call was made — so that file cannot contain prose.
+    #    Failing that, the review is read out of the agent's final message
+    #    (steps.pi.outputs.response), which is the older contract and the one an
+    #    unconstrained model can and does get wrong.
+    #
+    #    This step is deterministic: a flaky/empty model output fails THIS lens
+    #    job loudly (attributably) so a human re-runs it. No automatic retry. ──
     - name: Parse findings + post review
       id: post
       if: always() && inputs.mode == 'lens'
@@ -368,6 +411,7 @@ runs:
         AGENT_SUCCESS: ${{ steps.pi.outputs.success }}
         DISMISS_SUPERSEDED: ${{ inputs.dismiss_superseded }}
         CLEANUP_AGENT_COMMENTS: ${{ inputs.cleanup_agent_comments }}
+        FINDINGS_PATH: ${{ runner.temp }}/adversarial-findings.json
       with:
         script: |
           const fs = require("fs");
@@ -379,7 +423,29 @@ runs:
 
           const SEVERITIES = new Set(["MUST FIX", "SHOULD FIX", "NITPICK"]);
 
-          // ── 1. Extract the JSON object from the agent's final message. ──
+          // ── 1. Read the review. ──
+          // Preferred channel: the file submit_findings wrote. Its contents came
+          // from a tool call whose arguments the PROVIDER checked against the
+          // schema, so this path cannot carry prose, a stray fence, or a bad
+          // escape — the three ways the message channel has failed in the field.
+          // Absent or unreadable, fall through to the message and the tolerant
+          // parser below; the tool is optional and can be switched off.
+          const findingsPath = process.env.FINDINGS_PATH || "";
+          let submitted = null;
+          if (findingsPath) {
+            try {
+              if (fs.existsSync(findingsPath)) {
+                submitted = JSON.parse(fs.readFileSync(findingsPath, "utf8"));
+              }
+            } catch (e) {
+              // Never fatal: the message channel is still there to try.
+              core.warning(`submit_findings wrote a file this step could not read (${e.message}); falling back to the agent's final message.`);
+              submitted = null;
+            }
+          }
+          if (submitted) core.info(`Read the review from submit_findings (${findingsPath}).`);
+
+          // ── 1b. Otherwise, extract the JSON object from the agent's final message. ──
           // The instructions ask for JSON only, but be tolerant: models often emit
           // a short prose preamble ("I'll fetch the diff.") before the JSON, or
           // wrap it in ```json fences. Strategy: strip fences, then walk brace
@@ -388,13 +454,17 @@ runs:
           // brace). Try the whole message first as the fast path.
           const raw = process.env.AGENT_RESPONSE || "";
           const fail = (m) => { core.setFailed(`Lens "${lensName}" — ${m}`); return null; };
-          if (!raw.trim()) {
+          let parsed = submitted && typeof submitted === "object" ? submitted : null;
+          // An empty final message is normal once the tool channel is in use:
+          // the lens has said everything it has to say by calling the tool, and
+          // some models reply with nothing afterwards. Only treat it as "the
+          // agent produced no output" when there is no submitted review either.
+          if (!parsed && !raw.trim()) {
             return fail(`agent produced no output (steps.pi.outputs.response empty; agent_success=${process.env.AGENT_SUCCESS}). Re-run this job to retry.`);
           }
           // Strip ```json / ``` fences so a fenced block parses as the whole.
-          const fenceStripped = raw.replace(/```(?:json)?/gi, "").trim();
-          let parsed = null;
-          try { parsed = JSON.parse(fenceStripped); } catch (_) {}
+          const fenceStripped = parsed ? "" : raw.replace(/```(?:json)?/gi, "").trim();
+          if (!parsed) { try { parsed = JSON.parse(fenceStripped); } catch (_) {} }
           if (!parsed) {
             // Walk from the first `{` to its matching `}`, skipping braces inside
             // string literals (so `{` inside a JSON string value doesn't fool us).
