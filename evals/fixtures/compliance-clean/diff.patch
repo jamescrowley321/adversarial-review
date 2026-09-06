@@ -1,0 +1,12 @@
+DIFFGIT a/src/invoice/footer.js b/src/invoice/footer.js
+index 7b8c9d0..8c9d0e1 100644
+--- a/src/invoice/footer.js
++++ b/src/invoice/footer.js
+@@ -3,6 +3,6 @@
+ function footerLine(invoice) {
+-  const issued = invoice.issuedAt.toISOString();
++  const issued = invoice.issuedAt.toLocaleDateString("en-US");
+   return `Invoice ${invoice.number} — issued ${issued}`;
+ }
+
+ module.exports = { footerLine };

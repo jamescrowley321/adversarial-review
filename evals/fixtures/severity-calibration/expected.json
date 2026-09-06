@@ -1,0 +1,12 @@
+{
+  "class": "must-block",
+  "smoke": false,
+  "pr_title": "One exploitable defect (a hardcoded backdoor password that grants admin)",
+  "guards": "One exploitable defect (a hardcoded backdoor password that grants admin) that must be MUST FIX, alongside one genuine style nit (an unclear one-letter variable). Tests that the lens escalates the exploit and does NOT escalate the nit. (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "blind": {
+      "block": true,
+      "location_matches": "^src/auth/login\\.js:"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "class": "must-not-block",
+  "smoke": true,
+  "pr_title": "Well-written authenticated endpoint: parameterized query, ownership impl",
+  "guards": "Well-written authenticated endpoint: parameterized query, ownership implicit (queries by req.user.id only). Sentinel must report no security findings; Viper is active (auth surface touched) and must report no exploitable findings \u2014 neither may manufacture issues. (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "sentinel": {
+      "block": false
+    },
+    "viper": {
+      "block": false
+    },
+    "owasp-web": {
+      "block": false
+    }
+  }
+}

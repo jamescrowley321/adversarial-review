@@ -48,6 +48,13 @@ export function foldReps(run, reps) {
   } else if (wantBlock && !locationOk) {
     pass = false;
     reason = `blocked, but no finding location matched /${run.expect.location_matches}/`;
+  } else if (run.expect.max_findings != null && parsed.some((r) => (r.findings || []).length > run.expect.max_findings)) {
+    // Activation gates: a lens whose gate fires must emit [] and stop. "Did not
+    // block" is not enough — a skipping lens that still files NITPICKs is not
+    // skipping, and the noise is the thing the gate exists to prevent.
+    const worst = Math.max(...parsed.map((r) => (r.findings || []).length));
+    pass = false;
+    reason = `expected at most ${run.expect.max_findings} finding(s) (activation gate should have fired); saw ${worst}`;
   } else {
     pass = true;
     reason = wantBlock ? "blocked as expected" : "did not block, as expected";

@@ -1,0 +1,11 @@
+{
+  "class": "must-not-block",
+  "smoke": true,
+  "pr_title": "fix: invoice footer date format",
+  "guards": "Genuinely human PR: named human, plain summary, no secrets in the diff. Compliance must report no findings \u2014 a human PR needs no provenance block. (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "compliance": {
+      "block": false
+    }
+  }
+}

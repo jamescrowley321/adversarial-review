@@ -1,0 +1,28 @@
+DIFFGIT a/src/middleware/auth.js b/src/middleware/auth.js
+new file mode 100644
+index 0000000..2c3d4e5
+--- /dev/null
++++ b/src/middleware/auth.js
+@@ -0,0 +1,22 @@
++"use strict";
++
++const jwt = require("jsonwebtoken");
++
++const SECRET = process.env.JWT_SECRET || "dev-secret";
++
++// Verify the bearer token on every request except the public assets.
++function requireAuth(req, res, next) {
++  if (req.url.startsWith("/public")) {
++    return next();
++  }
++  const header = req.headers.authorization || "";
++  const token = header.replace("Bearer ", "");
++  try {
++    req.user = jwt.verify(token, SECRET);
++    return next();
++  } catch (err) {
++    return res.status(401).json({ error: "unauthorized" });
++  }
++}
++
++module.exports = { requireAuth };

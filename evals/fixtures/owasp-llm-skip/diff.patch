@@ -1,0 +1,19 @@
+DIFFGIT a/src/money.js b/src/money.js
+new file mode 100644
+index 0000000..b1c2d3e
+--- /dev/null
++++ b/src/money.js
+@@ -0,0 +1,13 @@
++"use strict";
++
++// Round a currency amount to whole cents, avoiding float drift.
++function roundCents(amount) {
++  return Math.round((amount + Number.EPSILON) * 100) / 100;
++}
++
++// Sum a list of line-item amounts.
++function subtotal(lineItems) {
++  return roundCents(lineItems.reduce((acc, li) => acc + li.amount, 0));
++}
++
++module.exports = { roundCents, subtotal };

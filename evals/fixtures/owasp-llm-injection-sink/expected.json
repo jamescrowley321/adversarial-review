@@ -1,0 +1,12 @@
+{
+  "class": "must-block",
+  "smoke": true,
+  "pr_title": "Agent feature that concatenates retrieved document text into the model p",
+  "guards": "Agent feature that concatenates retrieved document text into the model prompt (LLM01) and passes the model's returned string straight to child_process exec (LLM10 improper output handling). (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "owasp-llm": {
+      "block": true,
+      "location_matches": "^src/agent/summarize\\.js:"
+    }
+  }
+}

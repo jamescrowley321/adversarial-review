@@ -1,0 +1,25 @@
+DIFFGIT a/src/routes/greeting.js b/src/routes/greeting.js
+new file mode 100644
+index 0000000..9d0e1f2
+--- /dev/null
++++ b/src/routes/greeting.js
+@@ -0,0 +1,19 @@
++"use strict";
++
++const express = require("express");
++
++const router = express.Router();
++
++// Friendly landing banner.
++router.get("/greet", (req, res) => {
++  res.send("<h1>Welcome, " + req.query.name + "!</h1>");
++});
++
++// Allow the marketing site to call our JSON endpoints from the browser.
++router.use((req, res, next) => {
++  res.set("Access-Control-Allow-Origin", "*");
++  res.set("Access-Control-Allow-Credentials", "true");
++  next();
++});
++
++module.exports = router;

@@ -1,0 +1,19 @@
+DIFFGIT a/src/routes/metrics.js b/src/routes/metrics.js
+new file mode 100644
+index 0000000..d3e4f5a
+--- /dev/null
++++ b/src/routes/metrics.js
+@@ -0,0 +1,13 @@
++"use strict";
++
++const express = require("express");
++const { collect } = require("../metrics");
++
++const router = express.Router();
++
++router.get("/internal/metrics", async (req, res) => {
++  const snapshot = await collect();
++  return res.json(snapshot);
++});
++
++module.exports = router;
