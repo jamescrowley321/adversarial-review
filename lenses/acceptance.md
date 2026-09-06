@@ -28,8 +28,12 @@ you have an incomplete record, and the verdict is UNVERIFIED, not FAIL.
    - Is there a unit test that verifies it? An integration/e2e test if the AC involves cross-component or API behavior?
    - **If you cannot find it, before concluding it is absent:** re-read the diff
      and name the file where the implementation would live. Is that file in the
-     diff? If it is not — or the diff was truncated, or a tool call failed —
-     you have not verified absence. Classify **UNVERIFIED**.
+     diff? If it is not, you have not verified absence — the file was simply not
+     changed, and there is nothing there to review. Classify **UNVERIFIED**.
+   - **Separately: was your evidence complete?** If the diff was truncated, or a
+     tool call failed, you did not see the whole change. That is not an AC
+     verdict — it is a gap in the review itself. Report it once, as described
+     under Rules.
 3. **Check for scope creep** — code not traceable to any AC.
 4. **Check architecture violations** if the repo documents enforcement guidelines.
 
@@ -62,6 +66,15 @@ the verdict belongs at the start of `detail`.
   did not read to the end, and never carry a requirement over from another review,
   an issue, or your own earlier reasoning as if you had verified it here — if you
   cannot quote it from something you fetched this run, it is not evidence.
+- **An incomplete review is reported, not silently absorbed.** UNVERIFIED means
+  "that file was not changed, so there is nothing to check" — a normal, common,
+  non-blocking outcome. It does NOT mean "I could not see the change." If the
+  diff was truncated or a tool call failed, emit **one additional** finding at
+  `SHOULD FIX` — not an AC verdict — saying exactly what you could not fetch and
+  which ACs are therefore unreviewed. Do not fold that into an AC's NITPICK,
+  where it disappears. A reviewer who could not read the whole change must say
+  so out loud; the gate should be advisory here rather than blocking, because
+  the fix is to re-run or narrow the diff, not to change the code.
 - **The shared Grounding block outranks this mapping.** A concern resting on code
   you cannot see is NITPICK or omitted, whatever its verdict label. The gate counts
   the severity you emit, not the hedge in your `detail`, so an uncertain `MUST FIX`
