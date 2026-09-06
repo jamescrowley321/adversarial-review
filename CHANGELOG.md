@@ -11,6 +11,30 @@ previous release and can be curated in the release PR before it is merged. See
 [CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. `[1.4.1]` and
 the older sections below it predate the automation and were written by hand.
 
+## [1.7.2](https://github.com/jamescrowley321/adversarial-review/compare/v1.7.1...v1.7.2) (2026-09-06)
+
+
+### Bug Fixes
+
+* **acceptance:** report an incomplete review instead of absorbing it ([cefe42e](https://github.com/jamescrowley321/adversarial-review/commit/cefe42e73e9db877d1276ac70bbcbd6bb3563f82))
+* **acceptance:** stop the Auditor blocking on absence it cannot verify ([98632f3](https://github.com/jamescrowley321/adversarial-review/commit/98632f333ee1dfb6b0e2bf698e2d0dc6ba40a10b))
+* **acceptance:** stop the Auditor blocking on absence it cannot verify ([3d5c6a8](https://github.com/jamescrowley321/adversarial-review/commit/3d5c6a84293ff779c3f75914abdc6889f276929a))
+* **action:** delete the agent's duplicate raw-JSON PR comment ([8c115ba](https://github.com/jamescrowley321/adversarial-review/commit/8c115baec38682779210aea349a698325749790b))
+* **action:** derive accepted lens names from the shipped persona heading ([f05acd2](https://github.com/jamescrowley321/adversarial-review/commit/f05acd2881892ce4fa1b11fc3fcb377e5a089f8e))
+* **evals:** address lens findings and a harness token-cap bug ([2c5cd5b](https://github.com/jamescrowley321/adversarial-review/commit/2c5cd5ba674ed32f57e2270c1af786d455e5da22))
+* **evals:** close the remaining gate findings ([5a7f358](https://github.com/jamescrowley321/adversarial-review/commit/5a7f35800d7db3f0c25af44bfc92bee207867543))
+* **evals:** drop checkout credentials from the PR-triggered job ([ff3fe1d](https://github.com/jamescrowley321/adversarial-review/commit/ff3fe1d6188cfc0a57d8bb41d2f771c012175b65))
+* **evals:** keep additive prompt grounding instead of stripping it ([0df086a](https://github.com/jamescrowley321/adversarial-review/commit/0df086a53c1124969df5ae1b5e2aba8bb13d2208))
+* **evals:** keep the provider key off pull-request-triggered runs ([38eeff7](https://github.com/jamescrowley321/adversarial-review/commit/38eeff714e1f8f0f46e895436a10ef0a38a7f184))
+* **evals:** separate provider failures from lens quality; close a fixture gap ([fc4a5ab](https://github.com/jamescrowley321/adversarial-review/commit/fc4a5abf91387e09f6859ea70191dd286e2f641d))
+* **evals:** stop fixture patches leaking their contents into the reviewed diff ([7e39699](https://github.com/jamescrowley321/adversarial-review/commit/7e39699e82a74a4e10dccdeac28fd800da2f407f))
+* **evals:** use the singular [allowlist] table gitleaks 8.24 understands ([4934fdc](https://github.com/jamescrowley321/adversarial-review/commit/4934fdc64aa7e45bcdc5951403c64cdba95527fc))
+* prefer GitHub's event timestamp over the runner clock for grounding ([1254f34](https://github.com/jamescrowley321/adversarial-review/commit/1254f3413c7143b5ad2ce31205a81d94353be890))
+* tell lenses what they cannot see, and stop reviewing docs as commands ([5d3aacd](https://github.com/jamescrowley321/adversarial-review/commit/5d3aacd1aca4f74b5edd12124a8c32490fb64336))
+* tell lenses what they cannot see, and stop reviewing docs as commands ([ddd07fb](https://github.com/jamescrowley321/adversarial-review/commit/ddd07fbe985b331373b726e90ec7d2aa1f0afe69))
+* temporally ground lenses to the CI run date (stop 2026-date false positives) ([2863b61](https://github.com/jamescrowley321/adversarial-review/commit/2863b611a6ecb849e9ab2ef51cb24dfc9d511edf))
+* temporally ground lenses to the CI run date (stop 2026-date false positives) ([fa7edc7](https://github.com/jamescrowley321/adversarial-review/commit/fa7edc7661c4952f42458c59233ecd6c963a4c73))
+
 ## [1.7.1](https://github.com/jamescrowley321/adversarial-review/compare/v1.7.0...v1.7.1) (2026-09-04)
 
 
