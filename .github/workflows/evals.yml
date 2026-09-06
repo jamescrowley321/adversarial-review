@@ -68,9 +68,13 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded PR runs, but NEVER cancel a run on main: those produce the
+# per-merge scorecard, and a burst of merges silently discarded one (the
+# 8d77928 baseline was killed 3 minutes in by the next merge). Losing the
+# measurement defeats the reason the paid layer runs on main at all.
 concurrency:
   group: evals-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ── Free, deterministic, every PR. No secrets in scope. ──

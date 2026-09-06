@@ -80,11 +80,12 @@ merge is blocked until the MUST FIX findings are resolved.
 | `model` | `z-ai/glm-5.2` | Any model your provider exposes |
 | `models_config` | — (empty) | JSON for pi's `~/.pi/agent/models.json` (path is `$HOME`-relative), written before the lens runs (`mode: lens` only). Enforce per-model OpenRouter routing guardrails — `compat.openRouterRouting` with `zdr: true`, `sort: "price"`, `quantizations`, and `ignore` lists — on the request itself, not just at the account level. **Strict allowlist:** only `providers.<provider>.modelOverrides.<model>.compat.openRouterRouting` with safe scalar/array keys is accepted; dangerous keys (`baseUrl`, `endpoint`, `headers`, `apiKey`, `token`) are rejected loudly to prevent redirecting key-bearing requests. Invalid/out-of-schema JSON fails the job. Empty/omitted removes any stale file (no-op on ephemeral runners). Must be workflow-author-controlled — never derive from untrusted PR/issue content. |
 | `thinking_level` | `medium` | `low` \| `medium` \| `high` |
-| `diff_max_lines` | `2000` | Diff truncation guard |
-| `diff_max_bytes` | `204800` | Diff truncation guard |
-| `diff_ignore_patterns` | lockfiles, build output, vendored code | Space-separated globs |
+| `diff_max_lines` | `2000` | Diff truncation guard. The limit is disclosed to the agent so a truncated diff is not mistaken for a complete one — raise it for large PRs rather than letting reviews run on a partial diff. |
+| `diff_max_bytes` | `204800` | Diff truncation guard (same disclosure). |
+| `diff_ignore_patterns` | lockfiles, build output, vendored code | Space-separated globs. Withheld paths are named in the lens prompt, so an excluded file is reported as unverified rather than missing. |
 | `pr_number` | triggering PR | Override for manual runs |
 | `dismiss_superseded` | `true` | On re-run, dismiss this lens's prior reviews from earlier commits + collapse their comments as OUTDATED (keeps re-pushed PRs quiet) |
+| `cleanup_agent_comments` | `true` | **Deletes** the raw-JSON comment the pi agent action posts on the PR as a side effect of running. That comment is the agent's final message verbatim — the same findings this action re-posts as a rendered `## <Lens>` review — so it is an unreadable duplicate, and nothing else removes it: `dismiss_superseded` reaches reviews and their *inline* comments only. One accumulates per lens per push (8 lenses × 7 pushes left 60 on a single PR). Deletion is lossless because the content is reproduced in the review. Only a bot-authored comment that parses as JSON, carries a `findings` array, and names *this* lens is touched, and only after the review has landed. Set `false` to keep them. |
 
 ### Toggling lenses
 

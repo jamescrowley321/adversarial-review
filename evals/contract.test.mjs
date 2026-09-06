@@ -478,6 +478,24 @@ describe("diff scope disclosure", () => {
     assert.match(p, /[Nn]ever report a withheld file as missing/);
   });
 
+  test("the truncation limits are named", async () => {
+    const p = await compose({ MAX_LINES: "2000", MAX_BYTES: "204800" });
+    assert.match(p, /Diff limits:/);
+    assert.ok(p.includes("2000 lines"), "the prompt does not name the line cap");
+    assert.ok(p.includes("204800 bytes"), "the prompt does not name the byte cap");
+    assert.match(p, /not evidence that the code is missing/i);
+  });
+
+  test("the limits disclosure precedes the persona", async () => {
+    const p = await compose({ MAX_LINES: "2000" });
+    assert.ok(p.indexOf("Diff limits:") < p.indexOf("# Acceptance Auditor"));
+  });
+
+  test("no limits line when no caps are configured", async () => {
+    const p = await compose({ MAX_LINES: "", MAX_BYTES: "" });
+    assert.doesNotMatch(p, /Diff limits:/);
+  });
+
   test("no scope line when nothing is withheld", async () => {
     const p = await compose({ IGNORED_PATHS: "" });
     assert.doesNotMatch(p, /Diff scope:/);

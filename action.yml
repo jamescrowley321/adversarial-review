@@ -180,6 +180,8 @@ runs:
         PR: ${{ steps.ctx.outputs.pr_number }}
         REPO: ${{ github.repository }}
         IGNORED_PATHS: ${{ inputs.diff_ignore_patterns }}
+        MAX_LINES: ${{ inputs.diff_max_lines }}
+        MAX_BYTES: ${{ inputs.diff_max_bytes }}
       run: |
         const fs = require("fs");
         const path = require("path");
@@ -254,7 +256,27 @@ runs:
             `file as missing, unimplemented, or absent.\n\n`
           : "";
 
-        let prompt = target + scope + personaText.split("__PR_NUMBER__").join(process.env.PR) + "\n";
+        // Same failure as the withheld paths above, in its more dangerous form:
+        // get_pr_diff truncates at these limits and the agent cannot tell a
+        // truncated diff from a complete one. Every incident where a lens
+        // reported present code as "entirely absent" is consistent with this —
+        // the worst of them was a 5,855-insertion PR against a 2,000-line cap.
+        // Naming the limits lets the agent recognise the boundary and say its
+        // evidence ran out instead of concluding the work was never done.
+        const maxLines = (process.env.MAX_LINES || "").trim();
+        const maxBytes = (process.env.MAX_BYTES || "").trim();
+        const limits = (maxLines || maxBytes)
+          ? `Diff limits: the diff you fetch is truncated at ` +
+            [maxLines && `${maxLines} lines`, maxBytes && `${maxBytes} bytes`].filter(Boolean).join(" and ") +
+            `. A large pull request WILL be cut off. If the diff ends abruptly, or a ` +
+            `file you expected is absent, or a hunk stops mid-change, assume you are ` +
+            `looking at a truncated diff and NOT at a complete change. Absence of code ` +
+            `in a truncated diff is not evidence that the code is missing — say your ` +
+            `evidence was incomplete, name what you could not see, and do not raise a ` +
+            `blocking finding on it.\n\n`
+          : "";
+
+        let prompt = target + scope + limits + personaText.split("__PR_NUMBER__").join(process.env.PR) + "\n";
 
         // Publish the persona's H1 for the parse step. Models routinely echo the
         // heading, or just its subtitle, instead of the primary lens name — that
