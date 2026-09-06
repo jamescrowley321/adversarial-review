@@ -31,7 +31,7 @@
 //
 // Zero npm dependencies. Node >= 20.
 
-import { writeFileSync, readFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
+import { writeFileSync, readFileSync, mkdirSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { ROOT, runParseStep, filesFromDiff, parseReviewBody } from "./lib/harness.mjs";
@@ -122,8 +122,16 @@ async function compose() {
   });
   if (!runs.length) die("no fixtures selected");
 
-  rmSync(args.work, { recursive: true, force: true });
+  // Deliberately NOT `rm -rf args.work`: --work takes an arbitrary path, and a
+  // recursive delete of whatever a developer typed (or of `/`) is not a risk
+  // worth carrying to save a few unlink calls. Create the directory, then
+  // remove only files this harness itself writes.
   mkdirSync(args.work, { recursive: true });
+  for (const f of readdirSync(args.work)) {
+    if (f === "plan.json" || /\.prompt\.txt$/.test(f) || /\.rep\d+\.json$/.test(f)) {
+      rmSync(join(args.work, f), { force: true });
+    }
+  }
 
   const plan = { meta: { model: args.model, reps: args.reps, maxTokens: args.maxTokens, ref, set: args.full || args.fixture ? "full" : "smoke", fixtureCount: new Set(runs.map((r) => r.id)).size }, runs: [] };
   for (const r of runs) {
@@ -151,8 +159,12 @@ async function call(plan) {
   for (const r of plan.runs) for (let rep = 0; rep < plan.meta.reps; rep++) items.push({ r, rep });
 
   await mapLimit(items, args.concurrency, async ({ r, rep }) => {
-    const prompt = readFileSync(join(args.work, `${r.id}__${r.lensKey}.prompt.txt`), "utf8");
+    const promptPath = join(args.work, `${r.id}__${r.lensKey}.prompt.txt`);
     const out = join(args.work, `${r.id}__${r.lensKey}.rep${rep}.json`);
+    if (!existsSync(promptPath)) {
+      die(`missing prompt ${promptPath} — the plan and the work directory disagree. Re-run --phase compose.`);
+    }
+    const prompt = readFileSync(promptPath, "utf8");
     try {
       // rep 0 at temperature 0 is the reproducible draw; later reps sample so an
       // unstable verdict shows up as instability rather than hiding behind one
@@ -164,7 +176,13 @@ async function call(plan) {
         console.error(`\nFATAL: ${err.message}`);
         process.exit(3);
       }
-      writeFileSync(out, JSON.stringify({ error: String(err.message || err) }, null, 2));
+      // Recording the failure must not itself become a failure — a full disk
+      // here would otherwise lose every other fixture's result too.
+      try {
+        writeFileSync(out, JSON.stringify({ error: String(err.message || err) }, null, 2));
+      } catch (writeErr) {
+        console.error(`could not record the error for ${r.id} × ${r.lensKey}: ${writeErr.message}`);
+      }
     }
   });
   console.log(`Collected ${items.length} response(s) into ${args.work}`);

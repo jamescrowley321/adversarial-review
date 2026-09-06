@@ -10,7 +10,7 @@ Two layers, split by cost.
 | | What it does | Cost | Runs |
 |---|---|---|---|
 | **`contract.test.mjs`** | Drives `action.yml`'s **own** findings parser and merge gate over recorded inputs | free, ~0.1s | every PR |
-| **`run.mjs`** | Feeds frozen PR fixtures through the **shipped prompts** to a pinned model, scores the gate verdict | ~$0.30/run | push to `main`, or manual dispatch |
+| **`run.mjs`** | Feeds frozen PR fixtures through the **shipped prompts** to a pinned model, scores the gate verdict | ~$0.30/run | `main` only — push, or dispatch |
 
 Both exercise the real action. `evals/lib/action-script.mjs` lifts the inline
 `script:` / `run:` block scalars straight out of `action.yml` and executes them
@@ -161,9 +161,16 @@ what any same-repo PR can already do to this repo's workflows — but "no worse
 than the hole that already exists" is a bad reason to add another one, and this
 repo's own Sentinel and Viper lenses flag it on sight.
 
-So the paid layer runs only where a human with write access has already acted:
-**push to `main`** (post-review) and **manual dispatch**. To score a lens change
-before merging it, dispatch this workflow against the branch.
+So the paid layer only ever runs against `main` — code that has already been
+reviewed and merged. The workflow **refuses any other ref**, dispatch included,
+before checkout and before any step that holds the key.
+
+To score a lens change *before* merging it, run the harness locally with your
+own key — which is the normal development loop anyway:
+
+```bash
+OPENROUTER_API_KEY=... node evals/run.mjs --full
+```
 
 Every deterministic regression guard lives in the offline layer, so PR coverage
 never depends on the paid one.

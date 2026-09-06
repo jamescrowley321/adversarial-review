@@ -28,9 +28,11 @@
 # than the existing hole" is not a reason to add another one, and this repo's
 # own Sentinel and Viper lenses flag it.
 #
-# So the paid layer runs only where a human with write access has already
-# acted: on push to main (post-review) and on manual dispatch. To evaluate a
-# lens change before merge, dispatch this workflow against the branch.
+# So the paid layer only ever runs against `main` — code that has already been
+# reviewed and merged. Push to main runs it automatically when a relevant path
+# changed; workflow_dispatch runs it on demand, and REFUSES any ref other than
+# main. To score a lens change BEFORE merge, run the harness locally with your
+# own key: OPENROUTER_API_KEY=... node evals/run.mjs --full
 
 name: Evals
 
@@ -127,11 +129,27 @@ jobs:
           printf 'run=%s\nset=smoke\n' "$run" >> "$GITHUB_OUTPUT"
 
   live:
-    name: Live evals (${{ needs.changes.outputs.set }} set)
+    name: Live evals
     needs: [contract, changes]
     if: github.event_name != 'pull_request' && needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
+      # The provider key is a REPO secret, so only code that has already been
+      # reviewed and merged may see it. A workflow_dispatch against an arbitrary
+      # branch would otherwise hand OPENROUTER_API_KEY to that branch's
+      # evals/run.mjs. This runs before checkout and before any step that has
+      # the secret, so a refused run never exposes it. To score a lens change
+      # BEFORE merge, run the harness locally with your own key:
+      #   OPENROUTER_API_KEY=... node evals/run.mjs --full
+      - name: Refuse to run outside main
+        if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        shell: bash
+        run: |
+          echo "::error::The live eval layer runs only on refs/heads/main (got '$REF'). It holds a repo secret, so it will not execute code from an unmerged branch. Run it locally with your own key instead: OPENROUTER_API_KEY=... node evals/run.mjs --full"
+          exit 1
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Check the provider key is available
