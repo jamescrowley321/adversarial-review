@@ -1,0 +1,86 @@
+DIFFGIT a/src/api/preferences.ts b/src/api/preferences.ts
+new file mode 100644
+index 0000000..3fd0a9b
+--- /dev/null
++++ b/src/api/preferences.ts
+@@ -0,0 +1,30 @@
++import { Router } from "express";
++import { db } from "../db/client";
++import { requireSession } from "../auth/session";
++
++export const preferences = Router();
++
++preferences.get("/api/preferences", requireSession, async (req, res) => {
++  const row = await db.one(
++    "select digest_enabled, quiet_start, quiet_end from user_preferences where user_id = $1",
++    [req.session.userId],
++  );
++  res.json(row ?? { digest_enabled: true, quiet_start: null, quiet_end: null });
++});
++
++preferences.put("/api/preferences", requireSession, async (req, res) => {
++  const { digest_enabled, quiet_start, quiet_end } = req.body ?? {};
++  if (typeof digest_enabled !== "boolean") {
++    return res.status(400).json({ error: "digest_enabled must be a boolean" });
++  }
++  await db.none(
++    `insert into user_preferences (user_id, digest_enabled, quiet_start, quiet_end)
++     values ($1, $2, $3, $4)
++     on conflict (user_id) do update set
++       digest_enabled = excluded.digest_enabled,
++       quiet_start    = excluded.quiet_start,
++       quiet_end      = excluded.quiet_end`,
++    [req.session.userId, digest_enabled, quiet_start ?? null, quiet_end ?? null],
++  );
++  res.status(204).end();
++});
+DIFFGIT a/src/db/migrations/003_preferences.sql b/src/db/migrations/003_preferences.sql
+new file mode 100644
+index 0000000..c905c9a
+--- /dev/null
++++ b/src/db/migrations/003_preferences.sql
+@@ -0,0 +1,11 @@
++create table user_preferences (
++  user_id        uuid primary key references users (id) on delete cascade,
++  digest_enabled boolean     not null default true,
++  quiet_start    time        null,
++  quiet_end      time        null,
++  updated_at     timestamptz not null default now()
++);
++
++create index user_preferences_digest_idx
++  on user_preferences (digest_enabled)
++  where digest_enabled = true;
+DIFFGIT a/src/workers/digest.ts b/src/workers/digest.ts
+new file mode 100644
+index 0000000..81afbbf
+--- /dev/null
++++ b/src/workers/digest.ts
+@@ -0,0 +1,27 @@
++import { db } from "../db/client";
++import { sendDigest } from "../mail/digest";
++
++/** True when `at` falls inside the user's configured quiet hours. */
++export function inQuietHours(at: Date, start: string | null, end: string | null): boolean {
++  if (!start || !end) return false;
++  const minutes = at.getUTCHours() * 60 + at.getUTCMinutes();
++  const [sh, sm] = start.split(":").map(Number);
++  const [eh, em] = end.split(":").map(Number);
++  const from = sh * 60 + sm;
++  const to = eh * 60 + em;
++  // A window that wraps midnight (22:00 -> 07:00) is inside when EITHER side matches.
++  return from <= to ? minutes >= from && minutes < to : minutes >= from || minutes < to;
++}
++
++export async function runDigest(now = new Date()) {
++  const rows = await db.many(
++    `select u.id, u.email, p.quiet_start, p.quiet_end
++       from users u
++       join user_preferences p on p.user_id = u.id
++      where p.digest_enabled = true`,
++  );
++  for (const row of rows) {
++    if (inQuietHours(now, row.quiet_start, row.quiet_end)) continue;
++    await sendDigest(row.email);
++  }
++}
