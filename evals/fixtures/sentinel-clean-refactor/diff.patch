@@ -1,8 +1,8 @@
 DIFFGIT a/src/pricing.js b/src/pricing.js
-index fc9b884..a8094ed 100644
+index fc9b884..76c33e5 100644
 --- a/src/pricing.js
 +++ b/src/pricing.js
-@@ -1,20 +1,21 @@
+@@ -1,20 +1,24 @@
  "use strict";
  
 +const BASE_BY_PLAN = Object.freeze({
@@ -23,14 +23,17 @@ index fc9b884..a8094ed 100644
 -  } else if (plan === "enterprise") {
 -    base = 60;
 -  } else {
-+  const base = BASE_BY_PLAN[plan];
-+  if (base === undefined) {
++  // Own-property check, not a bare lookup: a bare `BASE_BY_PLAN[plan]` resolves
++  // inherited keys such as "constructor" or "toString", which sail past an
++  // `=== undefined` guard and price the order as NaN.
++  if (!Object.hasOwn(BASE_BY_PLAN, plan)) {
      throw new Error(`unknown plan: ${plan}`);
    }
 -  let total = base * seats;
 -  if (seats >= 50) {
 -    total = total * 0.9;
 -  }
++  const base = BASE_BY_PLAN[plan];
 +  const gross = base * seats;
 +  const total = seats >= VOLUME_DISCOUNT_SEATS ? gross * VOLUME_DISCOUNT_RATE : gross;
    return Math.round(total * 100) / 100;

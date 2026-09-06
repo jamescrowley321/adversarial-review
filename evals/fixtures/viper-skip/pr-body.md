@@ -1,3 +1,4 @@
 ## Summary
 
-Docs-and-CSS-only diff. Viper's activation gate must fire: report the skip line and stop — no security theater on a stylesheet.
+Updates the landing page copy and nudges the section spacing. Text and CSS
+only — no application code.

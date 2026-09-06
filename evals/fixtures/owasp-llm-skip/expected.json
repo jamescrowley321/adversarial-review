@@ -1,8 +1,8 @@
 {
   "class": "must-not-block",
   "smoke": true,
-  "pr_title": "Pure arithmetic utility, no AI/LLM surface",
-  "guards": "Pure arithmetic utility, no AI/LLM surface. The OWASP LLM lens activation gate must fire: body starts with its header then the 'Skipped \u2014 no LLM/AI surface' line. (ported from the pre-#28 fixture corpus)",
+  "pr_title": "refactor(money): extract invoice rounding helper",
+  "guards": "Pure arithmetic utility, no AI/LLM surface. The OWASP LLM lens activation gate must fire: body starts with its header then the 'Skipped \u2014 no LLM/AI surface' line. (ported from the pre-#28 fixture corpus; PR body rewritten as a plausible description \u2014 the converted body was the fixture's own eval metadata, which described the expected lens behaviour and was correctly reported as prompt injection)",
   "lenses": {
     "owasp-llm": {
       "block": false,
