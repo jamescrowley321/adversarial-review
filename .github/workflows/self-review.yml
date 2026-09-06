@@ -142,6 +142,29 @@ jobs:
           # OpenRouter retired the undated anthropic/claude-sonnet-5 alias while
           # pi's catalog lacks the dated snapshot, so neither slug resolves.
           model: google/gemini-2.5-pro
+          # Exclude the eval fixture corpus from the reviewed diff. Those files
+          # are DATA, not code: frozen `diff.patch` snippets fed to a model as
+          # text, never imported, executed, or shipped. They contain planted
+          # defects on purpose — a deleted auth guard, a hardcoded credential —
+          # because a suite of only clean fixtures scores a lens that never
+          # blocks anything as perfect.
+          #
+          # Reviewing them produces guaranteed false positives on every push:
+          # Blind Hunter and the Compliance Auditor have each blocked on the
+          # planted credential and the removed guard, and on #29 the OWASP LLM
+          # lens reported a fixture's `src/api/reports.ts` as a real deleted
+          # authorization check. A 2431-line fixture there also truncated the
+          # diff, degrading review of the actual code.
+          #
+          # This is what diff_ignore_patterns is for (its default already skips
+          # lockfiles and build output). The fixtures are not unreviewed: the
+          # `Evals` workflow runs validate-fixtures.mjs on every PR, and the
+          # contract tests exercise them deterministically.
+          #
+          # The default list is repeated because setting this input replaces it.
+          diff_ignore_patterns: >-
+            dist/ build/ node_modules/ pnpm-lock.yaml package-lock.json
+            yarn.lock uv.lock poetry.lock go.sum Cargo.lock evals/fixtures/
 
   # Self-review intentionally has no preflight job: deterministic lint/security
   # checks run independently, while this gate covers only config + lens review.

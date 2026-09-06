@@ -1,0 +1,9 @@
+{
+  "class": "must-not-block",
+  "smoke": true,
+  "pr_title": "feat(search): keyboard navigation for the results dropdown",
+  "guards": "Incident 1a — the Acceptance Auditor reported 'search-result navigation implementation is missing' on a PR whose diff changed exactly those files. Every AC here is implemented AND unit-tested in the diff; asserting absence against a complete diff is the failure being guarded.",
+  "lenses": {
+    "acceptance": { "block": false }
+  }
+}

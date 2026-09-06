@@ -1,0 +1,55 @@
+DIFFGIT a/src/api/exports.js b/src/api/exports.js
+new file mode 100644
+index 0000000..165295b
+--- /dev/null
++++ b/src/api/exports.js
+@@ -0,0 +1,26 @@
++"use strict";
++
++const express = require("express");
++const router = express.Router();
++const db = require("../db");
++
++// POST /api/v1/exports — queue a CSV export of the caller's records.
++router.post("/api/v1/exports", async (req, res) => {
++  const job = await db.exports.enqueue({
++    tenant_id: req.user.tenant_id,
++    requested_by: req.user.id,
++    format: "csv",
++  });
++  res.status(202).json({ id: job.id, status: job.status });
++});
++
++// GET /api/v1/exports/:id — poll a queued export.
++router.get("/api/v1/exports/:id", async (req, res) => {
++  const job = await db.exports.findById(req.params.id);
++  if (!job || job.tenant_id !== req.user.tenant_id) {
++    return res.status(404).json({ error: "not_found" });
++  }
++  res.json({ id: job.id, status: job.status, url: job.url || null });
++});
++
++module.exports = router;
+DIFFGIT a/src/api/exports.test.js b/src/api/exports.test.js
+new file mode 100644
+index 0000000..672e81d
+--- /dev/null
++++ b/src/api/exports.test.js
+@@ -0,0 +1,17 @@
++"use strict";
++
++const request = require("supertest");
++const app = require("../app");
++
++describe("exports API", () => {
++  it("queues an export and returns 202 with a job id", async () => {
++    const res = await request(app).post("/api/v1/exports").set("Authorization", "Bearer t1");
++    expect(res.status).toBe(202);
++    expect(res.body.id).toBeDefined();
++  });
++
++  it("returns 404 for another tenant's job", async () => {
++    const res = await request(app).get("/api/v1/exports/other-tenant-job").set("Authorization", "Bearer t1");
++    expect(res.status).toBe(404);
++  });
++});

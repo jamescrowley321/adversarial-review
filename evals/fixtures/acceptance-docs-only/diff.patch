@@ -1,0 +1,29 @@
+DIFFGIT a/docs/runbook.md b/docs/runbook.md
+index 184d242..31c2a8e 100644
+--- a/docs/runbook.md
++++ b/docs/runbook.md
+@@ -2,8 +2,23 @@
+ 
+ ## Paging
+ 
+-Alerts route to the on-call rotation in PagerDuty.
++Alerts route to the on-call rotation in PagerDuty. Acknowledge within 5 minutes;
++if you cannot, decline so it escalates to the secondary rather than timing out.
+ 
+ ## Rollback
+ 
+ Re-run the previous deploy workflow with the last known-good tag.
++
++## Draining a bad node
++
++1. Cordon the node: `kubectl cordon <node>`.
++2. Drain it, respecting disruption budgets: `kubectl drain <node> --ignore-daemonsets`.
++3. Confirm the replacement is `Ready` before terminating the instance.
++
++## Escalation
++
++| Severity | First responder | Escalates to after |
++|---|---|---|
++| SEV-1 | on-call primary | 15 min |
++| SEV-2 | on-call primary | 60 min |
++| SEV-3 | next business day | — |

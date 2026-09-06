@@ -1,0 +1,15 @@
+DIFFGIT a/src/routes/documents.js b/src/routes/documents.js
+index c463821..3888de6 100644
+--- a/src/routes/documents.js
++++ b/src/routes/documents.js
+@@ -24,7 +24,9 @@ router.get("/documents/:id", loadDocument, requireTenantOwnership, (req, res) =>
+   res.json(res.locals.doc);
+ });
+ 
+-router.get("/documents/:id/download", loadDocument, requireTenantOwnership, async (req, res) => {
++// Download is hit by the preview iframe, which does not carry the session
++// cookie, so the ownership check was rejecting legitimate previews.
++router.get("/documents/:id/download", loadDocument, async (req, res) => {
+   const url = await db.documents.signedUrl(res.locals.doc.storage_key);
+   res.json({ url });
+ });

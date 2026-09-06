@@ -1,0 +1,25 @@
+# Gitleaks configuration: the default ruleset, plus one narrowly-scoped
+# allowlist for the eval fixture corpus.
+#
+# evals/fixtures/*/diff.patch are FROZEN inputs fed to the review lenses. They
+# are a deliberately vulnerable corpus — that is the point: a suite of only
+# clean fixtures scores a lens that never blocks anything as perfect. The
+# planted credential is written to be obviously non-functional, but git history
+# still carries the earlier realistic-looking literal, and a scanner that
+# reports the same known plant on every run trains people to ignore it.
+#
+# Scope is deliberately tight: only `diff.patch` directly inside a fixture
+# directory. Fixture metadata, the harness, and the rest of the repo — evals/
+# included — are still fully scanned, so a real secret committed anywhere a
+# person would actually put one is still caught.
+#
+# Uses the singular [allowlist] table, not [[allowlists]]: the pinned
+# gitleaks-action ships 8.24.x, which does not understand the plural form and
+# silently finds nothing to allow.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic credentials planted in frozen eval fixtures (evals/README.md)"
+paths = ['''^evals/fixtures/[^/]+/diff\.patch$''']

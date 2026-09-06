@@ -1,0 +1,35 @@
+DIFFGIT a/src/integrations/mailer.js b/src/integrations/mailer.js
+new file mode 100644
+index 0000000..6aa3201
+--- /dev/null
++++ b/src/integrations/mailer.js
+@@ -0,0 +1,29 @@
++"use strict";
++
++const fetch = require("node-fetch");
++
++const SENDGRID_KEY = "SG.EXAMPLE-NOT-A-REAL-KEY.eval-fixture-placeholder-do-not-use";
++const ENDPOINT = "https://api.sendgrid.com/v3/mail/send";
++
++async function sendReceipt(user, order) {
++  const res = await fetch(ENDPOINT, {
++    method: "POST",
++    headers: {
++      Authorization: `Bearer ${SENDGRID_KEY}`,
++      "Content-Type": "application/json",
++    },
++    body: JSON.stringify({
++      personalizations: [{ to: [{ email: user.email }] }],
++      from: { email: "receipts@example.com" },
++      subject: `Receipt for order ${order.id}`,
++      content: [{ type: "text/plain", value: renderReceipt(order) }],
++    }),
++  });
++  return res.json();
++}
++
++function renderReceipt(order) {
++  return order.lines.map((l) => `${l.qty} x ${l.name} — ${l.total}`).join("\n");
++}
++
++module.exports = { sendReceipt };

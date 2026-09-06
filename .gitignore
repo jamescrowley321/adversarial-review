@@ -8,3 +8,6 @@ review-diff.patch
 .vscode/
 *.swp
 node_modules/
+
+# Eval harness scratch: composed prompts and raw model responses.
+evals/.work/

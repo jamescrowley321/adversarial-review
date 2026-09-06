@@ -1,0 +1,9 @@
+{
+  "class": "must-not-block",
+  "smoke": true,
+  "pr_title": "feat(lens): add the Freshness Auditor persona",
+  "guards": "Incident 2 — the Acceptance Auditor failed ACs on a prompt-file PR because the body described work a separate tracked issue implements. Both ACs here are satisfied by the diff; the wiring described as out-of-scope (#123) is not this PR's contract.",
+  "lenses": {
+    "acceptance": { "block": false }
+  }
+}

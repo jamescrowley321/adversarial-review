@@ -1,0 +1,226 @@
+# Lens evals — measure the reviewers, not just the code they review.
+#
+# Two layers, split by cost AND by trust:
+#
+#   contract  Offline, deterministic, free. Runs on EVERY pull request. Drives
+#             action.yml's own findings parser and merge gate over recorded
+#             inputs, so a regression in lens-name validation, JSON tolerance,
+#             severity handling or gate adjudication fails here in seconds.
+#             No secrets. This layer carries every deterministic regression
+#             guard, so PR coverage does not depend on the paid layer.
+#
+#   live      Model in the loop, needs OPENROUTER_API_KEY. Deliberately NOT
+#             triggered by pull_request — see the threat model below.
+#
+# ── Threat model (read before adding a pull_request trigger to `live`) ────────
+#
+# The harness executes script text lifted from the checked-out action.yml
+# (evals/lib/action-script.mjs), and runs evals/run.mjs — both PR-controlled.
+# That is the point: an eval that reimplements the parser would pass while the
+# shipped action is broken. Executing repo code on a runner is what every CI
+# job does, and a fork PR gets no secrets and a read-only token, so the offline
+# layer is safe to run on anything.
+#
+# Combining that with a provider key is the part that is not safe. A same-repo
+# branch PR DOES receive secrets, so a `pull_request`-triggered live job would
+# hand OPENROUTER_API_KEY to code the PR author controls. That is no worse than
+# what any same-repo PR can already do to this repo's workflows — but "no worse
+# than the existing hole" is not a reason to add another one, and this repo's
+# own Sentinel and Viper lenses flag it.
+#
+# The offline layer keeps running on pull requests, including forks. It holds
+# no secrets, takes `contents: read`, and discards the checkout credentials, so
+# there is nothing on that runner worth stealing. It does execute PR-authored
+# code — but so does `node --test` on any repo's test suite; an attacker would
+# put the payload in a test file, not in action.yml. That is the documented,
+# intended use of `pull_request` (as opposed to `pull_request_target`), and
+# removing it would mean deleting the regression guards this suite exists for.
+#
+# So the paid layer only ever runs against `main` — code that has already been
+# reviewed and merged. Push to main runs it automatically when a relevant path
+# changed; workflow_dispatch runs it on demand, and REFUSES any ref other than
+# main. To score a lens change BEFORE merge, run the harness locally with your
+# own key: OPENROUTER_API_KEY=... node evals/run.mjs --full
+
+name: Evals
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      set:
+        description: "Fixture set to run"
+        type: choice
+        options: [smoke, full]
+        default: full
+      model:
+        description: "Model to evaluate (pinned; recorded in the scorecard)"
+        type: string
+        default: ""
+      reps:
+        description: "Repetitions per fixture (a verdict must be unanimous to pass)"
+        type: string
+        default: "3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Free, deterministic, every PR. No secrets in scope. ──
+  contract:
+    name: Contract evals (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # verify-guards replays guards against pre-fix history
+          # Do not leave the job's GITHUB_TOKEN in .git/config. This job runs
+          # PR-authored code by design (its whole purpose is to execute the PR's
+          # action.yml and test files), so it should hold nothing worth taking.
+          # History is already fetched by this point; the later git reads are
+          # local and need no credentials.
+          persist-credentials: false
+
+      - name: Syntax-check the harness
+        run: |
+          set -euo pipefail
+          for f in evals/*.mjs evals/lib/*.mjs; do node --check "$f"; done
+
+      - name: Validate fixtures
+        run: node evals/validate-fixtures.mjs
+
+      - name: Verify the regression guards are load-bearing
+        run: node evals/verify-guards.mjs
+
+      - name: Contract evals
+        run: node --test evals/contract.test.mjs
+
+  # ── Does the paid layer have anything to measure? ──
+  changes:
+    name: Decide whether live evals are needed
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      set: ${{ steps.decide.outputs.set }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Every ${{ }} value is bound to an env var and read as "$VAR", never
+      # interpolated into the script text.
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+          DISPATCH_SET: ${{ inputs.set }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            printf 'run=true\nset=%s\n' "${DISPATCH_SET:-full}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # push to main: only pay when something that can move lens behaviour moved.
+          run=true
+          if [ -n "${BEFORE:-}" ] && [ "${BEFORE}" != "0000000000000000000000000000000000000000" ]; then
+            changed=$(git diff --name-only "$BEFORE" "$AFTER" 2>/dev/null || true)
+            if [ -n "$changed" ]; then
+              printf 'Changed files:\n%s\n' "$changed" | sed 's/^/  /'
+              if printf '%s\n' "$changed" | grep -qE '^(lenses/|action\.yml$|evals/)'; then run=true; else run=false; fi
+            fi
+          fi
+          printf 'run=%s\nset=smoke\n' "$run" >> "$GITHUB_OUTPUT"
+
+  live:
+    name: Live evals
+    needs: [contract, changes]
+    if: github.event_name != 'pull_request' && needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      # The provider key is a REPO secret, so only code that has already been
+      # reviewed and merged may see it. A workflow_dispatch against an arbitrary
+      # branch would otherwise hand OPENROUTER_API_KEY to that branch's
+      # evals/run.mjs. This runs before checkout and before any step that has
+      # the secret, so a refused run never exposes it. To score a lens change
+      # BEFORE merge, run the harness locally with your own key:
+      #   OPENROUTER_API_KEY=... node evals/run.mjs --full
+      - name: Refuse to run outside main
+        if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        shell: bash
+        run: |
+          echo "::error::The live eval layer runs only on refs/heads/main (got '$REF'). It holds a repo secret, so it will not execute code from an unmerged branch. Run it locally with your own key instead: OPENROUTER_API_KEY=... node evals/run.mjs --full"
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check the provider key is available
+        id: key
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        shell: bash
+        run: |
+          if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+            echo "::warning::OPENROUTER_API_KEY is not available — skipping the live eval layer. The offline contract evals still ran."
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Three steps on purpose. `compose` and `score` EXECUTE script text lifted
+      # from action.yml; `call` is the only step that needs the provider key.
+      # Keeping them apart means no step holds OPENROUTER_API_KEY while running
+      # action.yml's code. (`call` still runs evals/run.mjs, which is repo code —
+      # that residual is why this job never triggers on pull_request.)
+      - name: Compose prompts (no secrets in scope)
+        if: steps.key.outputs.have == 'true'
+        env:
+          EVAL_MODEL: ${{ inputs.model }}
+          EVAL_SET: ${{ needs.changes.outputs.set }}
+          EVAL_REPS: ${{ inputs.reps }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          # An `[ x ] && y` one-liner here would exit the script under `set -e`
+          # whenever the test is false — i.e. on every smoke run.
+          if [ "${EVAL_SET:-smoke}" = "full" ]; then args+=(--full); fi
+          args+=(--reps "${EVAL_REPS:-3}")
+          node evals/run.mjs --phase compose "${args[@]}"
+
+      - name: Call the model (secret in scope; runs no action.yml script)
+        if: steps.key.outputs.have == 'true'
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          EVAL_CONCURRENCY: "4"
+        shell: bash
+        run: node evals/run.mjs --phase call
+
+      - name: Score against the action's parser (no secrets in scope)
+        if: steps.key.outputs.have == 'true'
+        shell: bash
+        run: node evals/run.mjs --phase score
+
+      - name: Upload scorecard
+        if: always() && steps.key.outputs.have == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lens-eval-scorecard-${{ github.run_id }}
+          path: |
+            evals/baseline/scorecard.md
+            evals/baseline/baseline.json
+          retention-days: 30
+          if-no-files-found: warn
