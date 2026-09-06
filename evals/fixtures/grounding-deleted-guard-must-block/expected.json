@@ -1,0 +1,12 @@
+{
+  "class": "must-block",
+  "smoke": true,
+  "pr_title": "perf: speed up the reports endpoint",
+  "guards": "Positive control, ported from #29. AC-2 says access control is preserved and the diff deletes the permission check on a visible `-` line. Without it, every must-not-block fixture here could be satisfied by a lens that never blocks.",
+  "lenses": {
+    "acceptance": {
+      "block": true,
+      "location_matches": "^src/api/reports\\.ts:"
+    }
+  }
+}

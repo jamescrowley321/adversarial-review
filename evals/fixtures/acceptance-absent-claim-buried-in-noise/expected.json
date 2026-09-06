@@ -1,0 +1,11 @@
+{
+  "class": "must-not-block",
+  "smoke": false,
+  "pr_title": "fix: establish frontend CI and test baseline",
+  "guards": "Incident (healthcloud-console-web#58) as it actually was: 5,855 insertions, almost all lockfile churn, with the real change near the end. The Auditor reported the implementation 'missing'. Diff volume is the suspected trigger, so this keeps the real change and buries it the way production did. Non-smoke: it is large. Ported from #29.",
+  "lenses": {
+    "acceptance": {
+      "block": false
+    }
+  }
+}

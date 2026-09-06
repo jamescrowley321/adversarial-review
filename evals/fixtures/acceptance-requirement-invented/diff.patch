@@ -1,0 +1,31 @@
+DIFFGIT a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 1111111..2222222 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -100,1 +100,10 @@ jobs:
+       - run: npm run build
++
++  e2e:
++    name: Playwright E2E
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - run: npm ci
++      - run: npx playwright install --with-deps chromium
++      - run: npm run test:e2e
+DIFFGIT a/frontend/playwright.config.ts b/frontend/playwright.config.ts
+index 1111111..2222222 100644
+--- a/frontend/playwright.config.ts
++++ b/frontend/playwright.config.ts
+@@ -1,5 +1,11 @@
+ import { defineConfig, devices } from '@playwright/test';
+ 
+ export default defineConfig({
+   testDir: './e2e',
++  projects: [
++    {
++      name: 'chromium',
++      use: { ...devices['Desktop Chrome'] },
++    },
++  ],
+ });

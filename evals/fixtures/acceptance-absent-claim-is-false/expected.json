@@ -1,0 +1,11 @@
+{
+  "class": "must-not-block",
+  "smoke": true,
+  "pr_title": "fix: establish frontend CI and test baseline",
+  "guards": "Incident (healthcloud-console-web#58) \u2014 the Auditor claimed the search-result navigation implementation was missing and emitted MUST FIX, while the diff plainly contains the change. Ported from #29.",
+  "lenses": {
+    "acceptance": {
+      "block": false
+    }
+  }
+}
