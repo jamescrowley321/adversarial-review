@@ -1,0 +1,129 @@
+{
+  "meta": {
+    "model": "google/gemini-2.5-pro",
+    "reps": 3,
+    "maxTokens": 8000,
+    "ref": "6f905cc",
+    "set": "smoke",
+    "fixtureCount": 6,
+    "resolvedModel": "google/gemini-2.5-pro",
+    "thresholds": {
+      "mustBlockRecall": 0.8,
+      "jsonValidity": 0.95,
+      "falsePositiveRate": 0
+    }
+  },
+  "lenses": {
+    "acceptance": {
+      "recall": 1,
+      "falsePositiveRate": 0,
+      "jsonValidityRate": 1,
+      "stability": 1
+    },
+    "sentinel": {
+      "recall": 1,
+      "falsePositiveRate": null,
+      "jsonValidityRate": 1,
+      "stability": 1
+    }
+  },
+  "fixtures": [
+    {
+      "id": "acceptance-config-not-overread",
+      "lens": "acceptance",
+      "class": "must-not-block",
+      "expectBlock": false,
+      "verdicts": [
+        false,
+        false,
+        false
+      ],
+      "pass": true,
+      "reason": "did not block, as expected",
+      "severities": {
+        "NITPICK": 6
+      }
+    },
+    {
+      "id": "acceptance-docs-only",
+      "lens": "acceptance",
+      "class": "must-not-block",
+      "expectBlock": false,
+      "verdicts": [
+        false,
+        false,
+        false
+      ],
+      "pass": true,
+      "reason": "did not block, as expected",
+      "severities": {
+        "NITPICK": 10
+      }
+    },
+    {
+      "id": "acceptance-downstream-issue",
+      "lens": "acceptance",
+      "class": "must-not-block",
+      "expectBlock": false,
+      "verdicts": [
+        false,
+        false,
+        false
+      ],
+      "pass": true,
+      "reason": "did not block, as expected",
+      "severities": {
+        "NITPICK": 6
+      }
+    },
+    {
+      "id": "acceptance-implementation-present",
+      "lens": "acceptance",
+      "class": "must-not-block",
+      "expectBlock": false,
+      "verdicts": [
+        false,
+        false,
+        false
+      ],
+      "pass": true,
+      "reason": "did not block, as expected",
+      "severities": {
+        "NITPICK": 12
+      }
+    },
+    {
+      "id": "acceptance-unimplemented-ac",
+      "lens": "acceptance",
+      "class": "must-block",
+      "expectBlock": true,
+      "verdicts": [
+        true,
+        true,
+        true
+      ],
+      "pass": true,
+      "reason": "blocked as expected",
+      "severities": {
+        "NITPICK": 3,
+        "MUST FIX": 6
+      }
+    },
+    {
+      "id": "sentinel-deleted-auth-guard",
+      "lens": "sentinel",
+      "class": "must-block",
+      "expectBlock": true,
+      "verdicts": [
+        true,
+        true,
+        true
+      ],
+      "pass": true,
+      "reason": "blocked as expected",
+      "severities": {
+        "MUST FIX": 3
+      }
+    }
+  ]
+}

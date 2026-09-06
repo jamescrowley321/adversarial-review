@@ -183,7 +183,16 @@ async function scorePhase(plan) {
     for (let rep = 0; rep < plan.meta.reps; rep++) {
       const p = join(args.work, `${r.id}__${r.lensKey}.rep${rep}.json`);
       if (!existsSync(p)) { reps.push({ parsed: false, error: "no response recorded", blocked: null, findings: [] }); continue; }
-      const rec = JSON.parse(readFileSync(p, "utf8"));
+      let rec;
+      try {
+        rec = JSON.parse(readFileSync(p, "utf8"));
+      } catch (e) {
+        // A response file truncated by a killed run must not take the whole
+        // scorecard down with it — the other fixtures' results are still worth
+        // reporting, and a crash here looks identical to "the evals passed".
+        reps.push({ parsed: false, error: `unreadable response file ${p}: ${e.message}`, blocked: null, findings: [] });
+        continue;
+      }
       if (rec.error) { reps.push({ parsed: false, error: rec.error, blocked: null, findings: [] }); continue; }
       resolvedModel ||= rec.resolvedModel;
       // The action's REAL parser decides whether this output is acceptable and

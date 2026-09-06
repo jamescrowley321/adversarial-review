@@ -10,7 +10,7 @@ Two layers, split by cost.
 | | What it does | Cost | Runs |
 |---|---|---|---|
 | **`contract.test.mjs`** | Drives `action.yml`'s **own** findings parser and merge gate over recorded inputs | free, ~0.1s | every PR |
-| **`run.mjs`** | Feeds frozen PR fixtures through the **shipped prompts** to a pinned model, scores the gate verdict | ~$0.30/run | PRs touching `lenses/**`, `action.yml`, `evals/**` |
+| **`run.mjs`** | Feeds frozen PR fixtures through the **shipped prompts** to a pinned model, scores the gate verdict | ~$0.30/run | push to `main`, or manual dispatch |
 
 Both exercise the real action. `evals/lib/action-script.mjs` lifts the inline
 `script:` / `run:` block scalars straight out of `action.yml` and executes them
@@ -146,6 +146,28 @@ The model-behaviour incidents cannot be replayed from git — the artifact that
 failed was a model response, not code — so they live in `fixtures/` and are
 measured, not proved.
 
+## Why the paid layer does not run on pull requests
+
+The harness executes script text lifted from the checked-out `action.yml`, and
+`run.mjs` is itself repo code. That is deliberate — an eval that reimplements
+the parser passes while the shipped action is broken. Running repo code on a
+runner is what every CI job does, and a fork PR gets no secrets and a read-only
+token, so the **offline** layer is safe on anything.
+
+Combining that with a provider key is the part that is not safe. A **same-repo
+branch** PR does receive secrets, so a `pull_request`-triggered live job would
+hand `OPENROUTER_API_KEY` to code the PR author controls. That is no worse than
+what any same-repo PR can already do to this repo's workflows — but "no worse
+than the hole that already exists" is a bad reason to add another one, and this
+repo's own Sentinel and Viper lenses flag it on sight.
+
+So the paid layer runs only where a human with write access has already acted:
+**push to `main`** (post-review) and **manual dispatch**. To score a lens change
+before merging it, dispatch this workflow against the branch.
+
+Every deterministic regression guard lives in the offline layer, so PR coverage
+never depends on the paid one.
+
 ## Fixtures contain deliberate defects
 
 `evals/fixtures/*/diff.patch` are a vulnerable-code corpus: a deleted
@@ -192,6 +214,11 @@ failures` block so the behaviour is described rather than rediscovered.
   fail-closed "missing lens" branch turns that flake into a blocked merge.
   Whether the parser should repair common bad escapes is a live question; the
   test asserts today's behaviour so a change to it is deliberate and visible.
+
+## Recorded baseline
+
+`evals/baseline/` holds the last scorecard committed to the repo. Treat it as
+the number a prompt change is measured against, not as a target to hit.
 
 ## Ground rules
 

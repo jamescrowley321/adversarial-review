@@ -1,21 +1,42 @@
 # Lens evals — measure the reviewers, not just the code they review.
 #
-# Two layers, deliberately split by cost:
+# Two layers, split by cost AND by trust:
 #
-#   contract  — offline, deterministic, free. Runs on EVERY pull request. Drives
-#               action.yml's own findings parser and merge gate over recorded
-#               inputs, so a regression in lens-name validation, JSON tolerance,
-#               severity handling or gate adjudication fails here in seconds.
-#   live      — model in the loop. Runs only on PRs that touch the lens prompts
-#               or the action, because it costs money. Smoke set by default; the
-#               full set on workflow_dispatch or the `evals:full` label.
+#   contract  Offline, deterministic, free. Runs on EVERY pull request. Drives
+#             action.yml's own findings parser and merge gate over recorded
+#             inputs, so a regression in lens-name validation, JSON tolerance,
+#             severity handling or gate adjudication fails here in seconds.
+#             No secrets. This layer carries every deterministic regression
+#             guard, so PR coverage does not depend on the paid layer.
+#
+#   live      Model in the loop, needs OPENROUTER_API_KEY. Deliberately NOT
+#             triggered by pull_request — see the threat model below.
+#
+# ── Threat model (read before adding a pull_request trigger to `live`) ────────
+#
+# The harness executes script text lifted from the checked-out action.yml
+# (evals/lib/action-script.mjs), and runs evals/run.mjs — both PR-controlled.
+# That is the point: an eval that reimplements the parser would pass while the
+# shipped action is broken. Executing repo code on a runner is what every CI
+# job does, and a fork PR gets no secrets and a read-only token, so the offline
+# layer is safe to run on anything.
+#
+# Combining that with a provider key is the part that is not safe. A same-repo
+# branch PR DOES receive secrets, so a `pull_request`-triggered live job would
+# hand OPENROUTER_API_KEY to code the PR author controls. That is no worse than
+# what any same-repo PR can already do to this repo's workflows — but "no worse
+# than the existing hole" is not a reason to add another one, and this repo's
+# own Sentinel and Viper lenses flag it.
+#
+# So the paid layer runs only where a human with write access has already
+# acted: on push to main (post-review) and on manual dispatch. To evaluate a
+# lens change before merge, dispatch this workflow against the branch.
 
 name: Evals
 
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
   workflow_dispatch:
@@ -42,7 +63,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── Free, deterministic, every PR. ──
+  # ── Free, deterministic, every PR. No secrets in scope. ──
   contract:
     name: Contract evals (offline)
     runs-on: ubuntu-latest
@@ -65,9 +86,10 @@ jobs:
       - name: Contract evals
         run: node --test evals/contract.test.mjs
 
-  # ── Paid, model in the loop, scoped to changes that can move lens behaviour. ──
+  # ── Does the paid layer have anything to measure? ──
   changes:
     name: Decide whether live evals are needed
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     outputs:
       run: ${{ steps.decide.outputs.run }}
@@ -77,38 +99,37 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Every ${{ }} value is bound to an env var and read as "$VAR", never
+      # interpolated into the script text.
       - name: Decide
         id: decide
         env:
           EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
           DISPATCH_SET: ${{ inputs.set }}
         shell: bash
         run: |
           set -euo pipefail
           if [ "$EVENT" = "workflow_dispatch" ]; then
-            echo "run=true"  >> "$GITHUB_OUTPUT"
-            echo "set=${DISPATCH_SET:-full}" >> "$GITHUB_OUTPUT"
+            printf 'run=true\nset=%s\n' "${DISPATCH_SET:-full}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [ "$EVENT" != "pull_request" ]; then
-            echo "run=false" >> "$GITHUB_OUTPUT"; echo "set=smoke" >> "$GITHUB_OUTPUT"; exit 0
+          # push to main: only pay when something that can move lens behaviour moved.
+          run=true
+          if [ -n "${BEFORE:-}" ] && [ "${BEFORE}" != "0000000000000000000000000000000000000000" ]; then
+            changed=$(git diff --name-only "$BEFORE" "$AFTER" 2>/dev/null || true)
+            if [ -n "$changed" ]; then
+              printf 'Changed files:\n%s\n' "$changed" | sed 's/^/  /'
+              if printf '%s\n' "$changed" | grep -qE '^(lenses/|action\.yml$|evals/)'; then run=true; else run=false; fi
+            fi
           fi
-          # A change to a lens prompt, the action, or the harness itself can move
-          # lens behaviour. Anything else (docs, unrelated workflows) cannot.
-          changed=$(git diff --name-only "$BASE" "$HEAD" || true)
-          echo "Changed files:"; echo "$changed" | sed 's/^/  /'
-          if echo "$changed" | grep -qE '^(lenses/|action\.yml$|evals/)'; then run=true; else run=false; fi
-          case ",$LABELS," in *,evals:full,*) run=true; set=full ;; *) set=smoke ;; esac
-          echo "run=$run"  >> "$GITHUB_OUTPUT"
-          echo "set=$set"  >> "$GITHUB_OUTPUT"
+          printf 'run=%s\nset=smoke\n' "$run" >> "$GITHUB_OUTPUT"
 
   live:
     name: Live evals (${{ needs.changes.outputs.set }} set)
     needs: [contract, changes]
-    if: needs.changes.outputs.run == 'true'
+    if: github.event_name != 'pull_request' && needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -120,21 +141,17 @@ jobs:
         shell: bash
         run: |
           if [ -z "${OPENROUTER_API_KEY:-}" ]; then
-            echo "::warning::OPENROUTER_API_KEY is not available (fork PR?) — skipping the live eval layer. The offline contract evals still ran."
+            echo "::warning::OPENROUTER_API_KEY is not available — skipping the live eval layer. The offline contract evals still ran."
             echo "have=false" >> "$GITHUB_OUTPUT"
           else
             echo "have=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # Split into three steps on purpose. `compose` and `score` EXECUTE script
-      # text lifted from the pull request's own action.yml; `call` is the only
-      # step that needs the provider key. Keeping them apart means no step ever
-      # holds OPENROUTER_API_KEY while running PR-controlled code, so an edit to
-      # action.yml in a PR has no secret in reach.
-      #
-      # Every ${{ }} value is bound to an env var and read as "$VAR" — never
-      # interpolated into the script text, which would let context data become
-      # shell code (the same rule this action's own lenses enforce on consumers).
+      # Three steps on purpose. `compose` and `score` EXECUTE script text lifted
+      # from action.yml; `call` is the only step that needs the provider key.
+      # Keeping them apart means no step holds OPENROUTER_API_KEY while running
+      # action.yml's code. (`call` still runs evals/run.mjs, which is repo code —
+      # that residual is why this job never triggers on pull_request.)
       - name: Compose prompts (no secrets in scope)
         if: steps.key.outputs.have == 'true'
         env:
@@ -151,7 +168,7 @@ jobs:
           args+=(--reps "${EVAL_REPS:-3}")
           node evals/run.mjs --phase compose "${args[@]}"
 
-      - name: Call the model (secret in scope; runs no repo script)
+      - name: Call the model (secret in scope; runs no action.yml script)
         if: steps.key.outputs.have == 'true'
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
