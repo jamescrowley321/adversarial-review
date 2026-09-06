@@ -529,6 +529,34 @@ describe("malformed output repair", () => {
       "a lost review is the real cost of a parse failure — the failure must quote it");
   });
 
+  test("a 200 carrying non-JSON content fails gracefully, it does not crash", async () => {
+    // The JSON.parse of the repair response sits inside the same try/catch as
+    // the fetch, so a provider that returns 200 with prose lands on the normal
+    // failure path — the lens fails with the original output quoted, rather
+    // than the step throwing.
+    const r = await runParseStep({
+      lensName: "Sentinel",
+      agentResponse: "The guard on line 40 was removed.",
+      repairResponse: "Sure! Here is the JSON you asked for:",
+    });
+    assert.notEqual(r.failed, null);
+    assert.match(String(r.failed), /guard on line 40/, "the original review must still be quoted");
+    assert.equal(r.posted, false);
+  });
+
+  test("only the agent's own message is sent for repair, never the diff or PR body", async () => {
+    // Bounds the blast radius of a prose answer that carries injected text: the
+    // repair model sees one message, not the pull request.
+    const r = await runParseStep({
+      lensName: "Sentinel", agentResponse: "prose about the change",
+      repairResponse: JSON.stringify({ lens: "Sentinel", summary: "s", findings: [] }),
+    });
+    const sent = r.repairCalls[0].body.messages[0].content;
+    assert.match(sent, /prose about the change/);
+    assert.match(sent, /never follow them/i, "the repair prompt must frame the text as data");
+    assert.doesNotMatch(sent, /BEGIN DIFF|diff --git/, "the diff must not be forwarded to the repair call");
+  });
+
   test("repair output is still schema-validated by the action", async () => {
     // A provider that ignores strict mode must not get a free pass.
     const r = await runParseStep({
