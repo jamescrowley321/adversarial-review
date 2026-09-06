@@ -312,7 +312,13 @@ runs:
           if (given === "") return "";
           const ok = asCount(given);
           if (!ok) {
-            console.log(`::warning::${name} is not a positive integer; using ${fallback} instead so the prompt and the diff tool agree.`);
+            // "0" reads as "unlimited" to plenty of people. It is not: there is
+            // no uncapped mode, and forwarding 0 would truncate to nothing.
+            // Say so rather than let the generic message imply a typo.
+            const zero = /^0+$/.test(given)
+              ? ` There is no uncapped mode — clear ${name} to defer to the diff tool's own limit.`
+              : "";
+            console.log(`::warning::${name} is not a positive integer; using ${fallback} instead so the prompt and the diff tool agree.${zero}`);
             return fallback;
           }
           if (floor && Number(ok) < floor) {

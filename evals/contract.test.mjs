@@ -716,7 +716,8 @@ describe("diff cap validation", () => {
     assert.notEqual(i, -1, `action.yml has no input named ${name}`);
     for (i += 1; i < lines.length; i++) {
       if (/^ {0,2}\S/.test(lines[i])) break; // dedent: left this input's block
-      const m = /^ {4}default: '([^']*)'$/.exec(lines[i]);
+      // Tolerate a trailing YAML comment on the default line.
+      const m = /^ {4}default: '([^']*)'\s*(?:#.*)?$/.exec(lines[i]);
       if (m) return m[1];
     }
     assert.fail(`action.yml has no single-quoted default for ${name}`);
@@ -761,6 +762,15 @@ describe("diff cap validation", () => {
     assert.ok(prompt.includes("800 lines"), "the prompt does not name the line cap");
     assert.ok(prompt.includes(`${bytes} bytes`), `the prompt names a byte cap other than the ${bytes} that was passed`);
     assert.ok(!prompt.includes("20 bytes"), "the prompt names the rejected cap");
+  });
+
+  test("0 is refused, and the warning says why", async () => {
+    // "0" reads as "unlimited" to plenty of people. There is no uncapped mode,
+    // and forwarding it would truncate to nothing — so it falls back like any
+    // other unusable value, but the operator is told what to do instead.
+    const { bytes, lines } = await compose({ MAX_LINES: "0", MAX_BYTES: "0" });
+    assert.equal(lines, shippedDefault("diff_max_lines"));
+    assert.equal(bytes, shippedDefault("diff_max_bytes"));
   });
 
   test("a hostile cap is still dropped, never interpolated", async () => {
