@@ -88,7 +88,10 @@ export function composeFromAction(lensKey) {
     });
     return done.then(() => {
       const raw = readFileSync(envFile, "utf8");
-      const m = raw.match(/^COMPOSED_PROMPT<<(\S+)\n([\s\S]*)\n\1\n?$/);
+      // Match the COMPOSED_PROMPT block wherever it sits: the compose step also
+      // writes LENS_HEADING, and an anchored whole-file match broke the moment a
+      // second variable appeared.
+      const m = raw.match(/(?:^|\n)COMPOSED_PROMPT<<(\S+)\n([\s\S]*?)\n\1\n/);
       if (!m) throw new Error("could not read COMPOSED_PROMPT back from the compose step");
       const full = m[2];
       if (!TARGETING.test(full)) {

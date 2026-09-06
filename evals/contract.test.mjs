@@ -95,6 +95,47 @@ describe("incident 3 — lens name validation (Sentinel persona naming)", () => 
     }
   });
 
+  // The generalization of incident 3. The observed failure was a model emitting
+  // the SUBTITLE of a persona H1 ("Security Auditor" from "Sentinel — Security
+  // Auditor Agent") rather than the primary name. The accepted names are now
+  // derived from the shipped H1 itself, so a persona rename cannot reopen this.
+  const subtitle = (h1) => {
+    const parts = h1.split(/\s*[—–]\s*/);
+    return parts.length > 1 ? parts.slice(1).join(" — ").trim() : null;
+  };
+
+  for (const key of shippedLensKeys()) {
+    const h1 = personaHeading(key);
+    const sub = subtitle(h1 || "");
+    if (!sub) continue;
+    test(`emitting only the subtitle of lenses/${key}.md validates`, async () => {
+      const r = await runParseStep({ lensName: lensName(key), agentResponse: emit(sub) });
+      assert.equal(
+        r.failed, null,
+        `job "${lensName(key)}" dies when the model emits "${sub}" — the same shape as the Sentinel incident`,
+      );
+    });
+  }
+
+  // Subtitles are accepted EXACTLY, never by containment: the OWASP Web subtitle
+  // "Application Security Lens" is a substring of the OWASP LLM subtitle
+  // "AI Application Security Lens". A containment rule would let one claim the
+  // other's output — a silent mis-attribution, worse than the failure it fixes.
+  test("a subtitle never cross-matches another lens", async () => {
+    for (const a of shippedLensKeys()) {
+      for (const b of shippedLensKeys()) {
+        if (a === b) continue;
+        const sub = subtitle(personaHeading(b) || "");
+        if (!sub) continue;
+        const r = await runParseStep({ lensName: lensName(a), agentResponse: emit(sub) });
+        assert.notEqual(
+          r.failed, null,
+          `job "${lensName(a)}" accepted the subtitle of "${lensName(b)}" ("${sub}")`,
+        );
+      }
+    }
+  });
+
   test("an empty lens field fails rather than defaulting to the job", async () => {
     const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("") });
     assert.notEqual(r.failed, null);
@@ -524,36 +565,3 @@ describe("scoring policy", () => {
   });
 });
 
-// ───────────────────────── Known gaps (baseline, not yet fixed) ─────────────────────────
-// Marked `todo` so CI stays green while the gap stays VISIBLE. Per the eval
-// ground rules these were written before any fix and are recorded honestly
-// rather than tuned until they pass. Drop the `todo` flag in the PR that fixes
-// them and they become permanent guards.
-
-describe("known gaps", () => {
-  // Generalization of incident 3. The observed failure was a model emitting the
-  // SUBTITLE of a persona H1 ("Security Auditor" from "Sentinel — Security
-  // Auditor Agent") instead of the primary name. action.yml's `aliases` map
-  // patches the two subtitles seen in the wild; the failure MODE is unguarded
-  // for every lens. sentinel.md's current subtitle ("Security Review Agent")
-  // is not in the map, so the exact incident is still reachable today under a
-  // different string. Fix: match on the persona's trailing segment too, or
-  // derive the alias map from the shipped H1s instead of hand-maintaining it.
-  const subtitle = (h1) => {
-    const parts = h1.split(/\s*[—–]\s*/);
-    return parts.length > 1 ? parts.slice(1).join(" — ").trim() : null;
-  };
-
-  for (const key of shippedLensKeys()) {
-    const h1 = personaHeading(key);
-    const sub = subtitle(h1 || "");
-    if (!sub) continue;
-    test(`emitting only the subtitle of lenses/${key}.md validates`, { todo: "unguarded failure mode — see known gaps" }, async () => {
-      const r = await runParseStep({ lensName: lensName(key), agentResponse: emit(sub) });
-      assert.equal(
-        r.failed, null,
-        `job "${lensName(key)}" dies when the model emits "${sub}" — the same shape as the Sentinel incident`,
-      );
-    });
-  }
-});

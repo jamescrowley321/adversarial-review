@@ -203,7 +203,19 @@ runs:
           `exactly owner=\`${owner}\`, repo=\`${name}\`, pull_number=${process.env.PR}. ` +
           `Do not guess or try other owner/repo values.\n\n`;
 
-        let prompt = target + fs.readFileSync(personaPath, "utf8").split("__PR_NUMBER__").join(process.env.PR) + "\n";
+        const personaText = fs.readFileSync(personaPath, "utf8");
+        let prompt = target + personaText.split("__PR_NUMBER__").join(process.env.PR) + "\n";
+
+        // Publish the persona's H1 for the parse step. Models routinely echo the
+        // heading, or just its subtitle, instead of the primary lens name — that
+        // is what killed every Sentinel job when the heading read "Sentinel —
+        // Security Auditor Agent" and the model emitted "Security Auditor".
+        // Deriving the accepted names from the shipped heading fixes the whole
+        // class; a hand-maintained alias map only ever covers the strings someone
+        // already got paged for.
+        const headingLine = personaText.split("\n").find((l) => l.startsWith("# "));
+        const heading = headingLine ? headingLine.replace(/^#\s*/, "").trim() : "";
+        fs.appendFileSync(process.env.GITHUB_ENV, `LENS_HEADING<<ADV_LENS_HEADING_EOF\n${heading}\nADV_LENS_HEADING_EOF\n`);
 
         // The reviewer's instructions come ONLY from this action's own pinned,
         // trusted lenses — never from the PR-under-review's checkout. Reading a
@@ -262,6 +274,7 @@ runs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         LENS_NAME: ${{ steps.ctx.outputs.lens_name }}
+        LENS_HEADING: ${{ env.LENS_HEADING }}
         PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
         AGENT_RESPONSE: ${{ steps.pi.outputs.response }}
         AGENT_SUCCESS: ${{ steps.pi.outputs.success }}
@@ -356,6 +369,20 @@ runs:
           // agent comment. Two copies of this rule would drift, and a drifted
           // copy would delete another lens's comment.
           const primary = (s) => s.split(/\s*[—–:|]\s*|\s+-\s+/)[0].trim();
+          // The persona's own H1, from the compose step. Its segments are the
+          // names a model actually emits, so they are accepted EXACTLY — never by
+          // containment. Containment across subtitles would cross-match: the
+          // OWASP Web subtitle "Application Security Lens" is a substring of the
+          // OWASP LLM subtitle "AI Application Security Lens", so a containment
+          // rule would let one lens claim the other's output.
+          const heading = String(process.env.LENS_HEADING || "").trim();
+          const headingNames = new Set();
+          if (heading) {
+            headingNames.add(norm(heading));
+            headingNames.add(norm(primary(heading)));
+            const parts = heading.split(/\s*[—–:|]\s*|\s+-\s+/).map((x) => x.trim()).filter(Boolean);
+            if (parts.length > 1) headingNames.add(norm(parts.slice(1).join(" ")));
+          }
           const matchesThisLens = (name) => {
             const raw = norm(String(name || "").trim());
             if (!raw) return false;
@@ -363,6 +390,7 @@ runs:
             return (
               n === expectedNorm ||
               primary(n) === expectedNorm ||
+              headingNames.has(n) ||
               n.includes(expectedNorm) ||
               expectedNorm.includes(n)
             );

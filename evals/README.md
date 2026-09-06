@@ -150,6 +150,7 @@ nothing.
 | Acceptance Auditor failed ACs on a docs PR | `acceptance-docs-only` | live |
 | Acceptance Auditor failed ACs on a prompt PR whose body described downstream work | `acceptance-downstream-issue` | live |
 | `lenses/sentinel.md`'s subtitle made the model emit `lens: "Security Auditor"`, failing the job deterministically | `contract.test.mjs → incident 3` | offline |
+| …generalized: a model emitting **any** persona's subtitle instead of its primary name | `contract.test.mjs → "emitting only the subtitle of lenses/*.md validates"`, one per shipped lens | offline |
 
 The model-behaviour incidents cannot be replayed from git — the artifact that
 failed was a model response, not code — so they live in `fixtures/` and are
@@ -199,18 +200,6 @@ Two consequences worth knowing:
   neither trips secret scanners nor sets a precedent for committing one.
 - `.gitleaks.toml` allowlists `evals/fixtures/*/diff.patch` and nothing else.
   Every other path in the repo, `evals/` included, is still scanned.
-
-## Known gaps
-
-Recorded honestly rather than tuned until green. See the `known gaps` block in
-`contract.test.mjs`, marked `todo` so CI stays green while the gap stays visible.
-
-- **Persona subtitles are still unguarded as a class.** Incident 3's fix added an
-  `aliases` map covering the two subtitles seen in the wild. The failure *mode* —
-  a model emitting the persona's subtitle instead of its primary name — still
-  fails for all eight lenses, including `sentinel.md`'s current subtitle
-  ("Security Review Agent"). Drop the `todo` flags in the PR that fixes it and
-  they become permanent guards.
 
 ## Observed live failure modes
 

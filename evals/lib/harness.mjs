@@ -103,6 +103,7 @@ export async function runParseStep({
   lensName, agentResponse, files = defaultFiles(), reviews = [], reviewComments = [],
   issueComments = [], failIssueList = false,
   dismissSuperseded = "false", cleanupAgentComments = "true", agentSuccess = "true", yml = null,
+  lensHeading = undefined,
 }) {
   const src = extractStepScript(yml ?? actionYml(), "Parse findings + post review", "script");
   const core = makeCore();
@@ -116,6 +117,9 @@ export async function runParseStep({
       AGENT_SUCCESS: agentSuccess,
       DISMISS_SUPERSEDED: dismissSuperseded,
       CLEANUP_AGENT_COMMENTS: cleanupAgentComments,
+      // CI publishes this from the compose step; default to the same value so
+      // the evals exercise what production actually passes.
+      LENS_HEADING: lensHeading === undefined ? headingForDisplayName(lensName) : lensHeading,
     },
   });
   const review = github.created[0] || null;
@@ -196,4 +200,25 @@ export function agentJsonComment({ lens, id = 500, findings = [], bot = true, fe
     user: { login: bot ? "github-actions[bot]" : "a-person" },
     body: body ?? (fenced ? "```json\n" + json + "\n```" : json),
   };
+}
+
+/**
+ * The shipped persona H1 for a display name, mirroring what action.yml's compose
+ * step publishes as LENS_HEADING. Returns "" for a name no persona claims.
+ */
+export function headingForDisplayName(displayName) {
+  const yml = actionYml();
+  const m = yml.match(/const NAMES = \{([\s\S]*?)\n\s*\};/);
+  if (!m) return "";
+  for (const line of m[1].split("\n")) {
+    const kv = line.match(/^\s*"?([a-z0-9-]+)"?:\s*"([^"]+)",?\s*$/);
+    if (kv && kv[2] === displayName) {
+      try {
+        const txt = readFileSync(join(ROOT, "lenses", `${kv[1]}.md`), "utf8");
+        const h = txt.split("\n").find((l) => l.startsWith("# "));
+        return h ? h.replace(/^#\s*/, "").trim() : "";
+      } catch { return ""; }
+    }
+  }
+  return "";
 }
