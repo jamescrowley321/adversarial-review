@@ -15,8 +15,8 @@ import { runParseStep, runGateStep, botReview, agentJsonComment, HEAD_SHA } from
 import { LENS_KEYS, lensName, personaHeading, shippedLensKeys, readPersona, readShared } from "./lib/lenses.mjs";
 import { foldReps, score, violations, THRESHOLDS } from "./lib/scorecard.mjs";
 import { extractStepScript, runNodeScript } from "./lib/action-script.mjs";
-import { composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault } from "./lib/fixtures.mjs";
-import { truncateDiff, truncateDiffByBytes, byteMarker } from "./lib/pi-diff.mjs";
+import { composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault, listFixtureIds } from "./lib/fixtures.mjs";
+import { truncateDiff, truncateDiffByBytes, byteMarker, renderGetPrDiff } from "./lib/pi-diff.mjs";
 import { ROOT as REPO_ROOT } from "./lib/harness.mjs";
 import { mkdtempSync, readFileSync as rf, rmSync } from "node:fs";
 import { join as pjoin } from "node:path";
@@ -856,5 +856,34 @@ describe("action.yml input defaults", () => {
     // NEXT input's default — a wrong cap stated as fact in every eval prompt.
     const yml = "inputs:\n  demo:\n    required: true\n  other:\n    default: 'wrong'\n";
     assert.throws(() => actionInputDefault("demo", yml), /no default found/);
+  });
+});
+
+// Raised as MUST FIX by two lenses on #40. The renderer is NOT sanitised: it is
+// a port of get_pr_diff, whose tool result wraps the diff in an unescaped
+// ```diff fence, and escaping it here would make fixtures measure something no
+// lens ever receives. The vector the lenses described — a fixture author
+// crafting a fence — is closed at validation instead, which also catches the
+// non-security version of the same problem: such a fixture would silently
+// measure fence-breaking rather than truncation.
+describe("fetch fixtures cannot smuggle a fence", () => {
+  test("the port reproduces the unescaped fence, deliberately", () => {
+    const out = renderGetPrDiff(42, "diff --git a/a.md b/a.md\n+```\n+not a fence in a real file");
+    assert.ok(out.startsWith("PR #42 Diff:\n```diff\n"), out.slice(0, 40));
+    assert.ok(out.includes("+```"), "the payload must be reproduced verbatim, not escaped");
+  });
+
+  test("validate-fixtures refuses a fetch fixture whose diff contains a fence", () => {
+    const src = rf(pjoin(REPO_ROOT, "evals", "validate-fixtures.mjs"), "utf8");
+    assert.match(src, /a `fetch` fixture's diff contains a ``` fence/,
+      "the guard that closes the fixture-authored fence vector is missing");
+  });
+
+  test("no shipped fetch fixture contains a fence", () => {
+    for (const id of listFixtureIds()) {
+      const fx = loadFixture(id);
+      if (!fx.fetch) continue;
+      assert.ok(!fx.diff.includes("```"), `${id}: a fetch fixture's diff must not contain a fence`);
+    }
   });
 });

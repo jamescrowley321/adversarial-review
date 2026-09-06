@@ -117,6 +117,20 @@ for (const id of ids) {
         if (!payload.truncation?.truncated) {
           fail(id, "`fetch` is set but the diff is smaller than the caps, so nothing is truncated — the fixture proves nothing about a truncated fetch. Lower max_lines/max_bytes or grow the diff.");
         }
+        // Fetch mode reproduces get_pr_diff's tool result, and that result wraps
+        // the diff in a ```diff fence WITHOUT escaping it — upstream's
+        // behaviour, reproduced on purpose so a fixture shows a lens what the
+        // real tool would hand it (see docs/upstream-issues.md #3).
+        //
+        // The consequence has to be caught here rather than papered over in the
+        // renderer. A fixture whose diff contains a fence closes the block
+        // early, so everything after it stops reading as quoted tool output —
+        // and the fixture then measures fence-breaking instead of the thing its
+        // name claims, silently. Refusing it keeps the port faithful AND leaves
+        // no way to author that shape by accident.
+        if (/^\s*```/m.test(fx.diff) || fx.diff.includes("```")) {
+          fail(id, "a `fetch` fixture's diff contains a ``` fence. Fetch mode reproduces get_pr_diff's UNESCAPED ```diff wrapper (upstream defect, docs/upstream-issues.md #3), so this diff would close the fence early and the fixture would measure fence-breaking rather than what it claims. Use inline mode, or change the fixture content.");
+        }
         visible = payload.truncation.text;
       }
     }
