@@ -688,18 +688,38 @@ describe("diff cap validation", () => {
         env: { ACTION_PATH: REPO_ROOT, LENS_KEY: "acceptance", PR: "7", REPO: "acme/widget", GITHUB_ENV: envFile, ...env },
       });
       const raw = rf(envFile, "utf8");
-      const g = (k) => (raw.match(new RegExp(`(?:^|\\n)${k}=(.*)`)) || [])[1];
+      // Line scan, not a regex built from `k`: Semgrep flags a constructed
+      // RegExp (detect-non-literal-regexp), and a literal comparison is the
+      // clearer thing to write for `KEY=value` anyway.
+      const g = (k) => {
+        const prefix = `${k}=`;
+        const line = raw.split("\n").find((l) => l.startsWith(prefix));
+        return line === undefined ? undefined : line.slice(prefix.length);
+      };
       const m = raw.match(/(?:^|\n)COMPOSED_PROMPT<<(\S+)\n([\s\S]*?)\n\1\n/);
       return { lines: g("EFFECTIVE_MAX_LINES"), bytes: g("EFFECTIVE_MAX_BYTES"), prompt: m ? m[2] : "" };
     } finally { rmSync(dir, { recursive: true, force: true }); }
   };
 
-  /** The `default:` action.yml actually ships for an input. */
+  /**
+   * The `default:` action.yml actually ships for an input.
+   *
+   * Scanned rather than matched with a constructed regex: Semgrep flags the
+   * latter (detect-non-literal-regexp), and a single pattern over YAML silently
+   * mis-reads shapes it did not anticipate. Here that would mean the drift
+   * guard below comparing against the wrong number and passing anyway — a test
+   * that cannot fail is worse than no test.
+   */
   const shippedDefault = (name) => {
-    const m = rf(pjoin(REPO_ROOT, "action.yml"), "utf8")
-      .match(new RegExp(`\\n {2}${name}:\\n(?:[^\\n]*\\n)*? {4}default: '([^']*)'`));
-    assert.ok(m, `action.yml has no default for ${name}`);
-    return m[1];
+    const lines = rf(pjoin(REPO_ROOT, "action.yml"), "utf8").split("\n");
+    let i = lines.indexOf(`  ${name}:`);
+    assert.notEqual(i, -1, `action.yml has no input named ${name}`);
+    for (i += 1; i < lines.length; i++) {
+      if (/^ {0,2}\S/.test(lines[i])) break; // dedent: left this input's block
+      const m = /^ {4}default: '([^']*)'$/.exec(lines[i]);
+      if (m) return m[1];
+    }
+    assert.fail(`action.yml has no single-quoted default for ${name}`);
   };
 
   test("the fallbacks in the compose step are the defaults action.yml ships", async () => {
