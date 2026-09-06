@@ -201,8 +201,28 @@ runs:
         // otherwise flags legitimate current-year timestamps (commit/PR/copyright
         // dates) as "future" / "fabricated" / an integrity problem — a false
         // positive that fails the Merge Gate on healthy PRs (seen with Gemini 2.5
-        // Pro on 2026 dates). Anchor "now" to the real run date from trusted CI.
-        const today = new Date().toISOString().slice(0, 10);   // YYYY-MM-DD (UTC)
+        // Pro on 2026 dates).
+        //
+        // Prefer a GitHub-stamped timestamp from the event payload over the
+        // runner's own clock: the payload is written by GitHub, while the runner
+        // clock is merely whatever the machine reports. Neither is reachable from
+        // PR content — which is the property that actually matters here, since a
+        // date the PR author could set would let a PR silently disable this
+        // grounding — but the payload is the better of the two. Fall back to the
+        // runner clock only if the payload is unreadable or carries no timestamp.
+        const isoDay = (v) => {
+          const d = new Date(v);
+          return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+        };
+        let today = null;
+        try {
+          const ev = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
+          today =
+            isoDay(ev?.pull_request?.updated_at) ||
+            isoDay(ev?.repository?.pushed_at) ||
+            isoDay(ev?.repository?.updated_at);
+        } catch (_) { /* fall through to the runner clock */ }
+        if (!today) today = new Date().toISOString().slice(0, 10);   // YYYY-MM-DD (UTC)
         const target =
           `You are reviewing GitHub pull request #${process.env.PR} in repository ` +
           `\`${repo}\`. When you call \`get_pr_diff\` or \`get_issue_or_pr_thread\`, pass ` +
