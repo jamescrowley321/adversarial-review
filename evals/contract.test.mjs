@@ -16,7 +16,7 @@ import { LENS_KEYS, lensName, personaHeading, shippedLensKeys, readPersona, read
 import { foldReps, score, violations, THRESHOLDS } from "./lib/scorecard.mjs";
 import { extractStepScript, runNodeScript } from "./lib/action-script.mjs";
 import { composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble } from "./lib/fixtures.mjs";
-import { truncateDiff } from "./lib/pi-diff.mjs";
+import { truncateDiff, truncateDiffByBytes, byteMarker } from "./lib/pi-diff.mjs";
 import { ROOT as REPO_ROOT } from "./lib/harness.mjs";
 import { mkdtempSync, readFileSync as rf, rmSync } from "node:fs";
 import { join as pjoin } from "node:path";
@@ -757,5 +757,45 @@ describe("fetch-path fixtures", () => {
   test("an ordinary fixture is still fed inline and untruncated", async () => {
     const { truncation } = fixtureDiffPayload(loadFixture("acceptance-docs-only"));
     assert.equal(truncation, null);
+  });
+});
+
+// The port's boundary behaviour, pinned. Raised as a MUST FIX on #40 ("an
+// out-of-bounds read in truncateDiffByBytes"); both halves of that claim are
+// false, and a test says so more durably than a reply thread does.
+describe("ported truncation — boundaries", () => {
+  test("the UTF-8 walk-back never reads past the buffer", () => {
+    // The read is only reached when the diff EXCEEDS maxBytes, so
+    // buf.length > maxBytes > budget === cutAt. Swept rather than argued.
+    for (let maxBytes = 1; maxBytes <= 400; maxBytes++) {
+      for (const len of [maxBytes + 1, maxBytes + 2, maxBytes + 50, 5000]) {
+        const buf = Buffer.from("x".repeat(len), "utf8");
+        const budget = maxBytes - Buffer.byteLength(byteMarker(maxBytes), "utf8");
+        assert.ok(Math.min(budget, buf.length) < buf.length,
+          `cutAt reached the end index at maxBytes=${maxBytes} len=${len}`);
+      }
+    }
+  });
+
+  test("a degenerate cap truncates without throwing", () => {
+    // Upstream quirk, reproduced on purpose: below the marker's own length the
+    // budget goes negative and the result can exceed maxBytes. Not a crash, not
+    // reachable from the shipped default (204800), and NOT corrected here — this
+    // file mirrors the tool. Asserted so a future edit to the port is deliberate.
+    const diff = "line one\nline two\nline three\n";
+    for (const maxBytes of [1, 5, 28]) {
+      const r = truncateDiffByBytes(diff, maxBytes);
+      assert.equal(r.truncated, true);
+      assert.ok(r.text.endsWith(byteMarker(maxBytes)), `maxBytes=${maxBytes}: marker missing`);
+    }
+    assert.equal(truncateDiffByBytes(diff, 29).truncated, false, "29 bytes fits the fixture exactly");
+  });
+
+  test("the cut never splits a multi-byte character", () => {
+    const uni = Array.from({ length: 60 }, (_, i) => `héllo wörld ✓ ${i}`).join("\n");
+    for (let maxBytes = 20; maxBytes < 200; maxBytes++) {
+      assert.ok(!truncateDiffByBytes(uni, maxBytes).text.includes("�"),
+        `replacement character produced at maxBytes=${maxBytes}`);
+    }
   });
 });

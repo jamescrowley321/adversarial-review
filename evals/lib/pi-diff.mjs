@@ -36,6 +36,20 @@ export function truncateDiffByBytes(diff, maxBytes) {
   let cutAt = Math.min(budget, buf.length);
 
   // Never split a UTF-8 continuation byte.
+  //
+  // `buf[cutAt]` cannot be an end-of-buffer read here: this branch is only
+  // reached when the diff EXCEEDS maxBytes, so buf.length > maxBytes > budget,
+  // and cutAt is budget. (JS Buffer indexing is bounds-checked and yields
+  // `undefined` regardless — the `?? 0` handles the documented return, it does
+  // not paper over an out-of-bounds access.) Pinned by "the UTF-8 walk-back
+  // never reads past the buffer" in contract.test.mjs.
+  //
+  // UPSTREAM QUIRK, reproduced deliberately: when maxBytes is smaller than the
+  // marker itself (< ~29), `budget` goes negative, `subarray(0, negative)`
+  // takes its from-the-end meaning, and the result can exceed maxBytes. Caps
+  // that small do not occur in production (the shipped default is 204800) and
+  // this file's job is to mirror the tool, not to improve on it — correcting it
+  // here would make a fixture measure behaviour no lens ever sees.
   while (cutAt > 0 && ((buf[cutAt] ?? 0) & 0xc0) === 0x80) cutAt--;
 
   let sliced = buf.subarray(0, cutAt).toString("utf8");
