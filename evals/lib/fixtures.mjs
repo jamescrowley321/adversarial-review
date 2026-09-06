@@ -29,6 +29,17 @@ const EVAL_REPO = "acme/widget";
  * sends — the "Diff scope" and "Diff limits" paragraphs were absent from every
  * eval prompt while being present in every real one.
  */
+/** The body of a quoted scalar, from after the opening quote to its close. */
+function closeQuoted(raw, q, name) {
+  for (let i = 1; i < raw.length; i++) {
+    if (raw[i] !== q) continue;
+    if (q === "'" && raw[i + 1] === "'") { i++; continue; }   // '' is an escaped quote
+    if (q === '"' && raw[i - 1] === "\\") continue;            // \" is escaped
+    return raw.slice(1, i);
+  }
+  throw new Error(`action.yml: input \`${name}\` has an unterminated ${q} default`);
+}
+
 export function actionInputDefault(name, yml = readFileSync(join(ROOT, "action.yml"), "utf8")) {
   // Scanned line by line rather than matched with a regex built from `name`.
   // Two reasons, both raised on the PR that added this: a constructed RegExp
@@ -57,9 +68,16 @@ export function actionInputDefault(name, yml = readFileSync(join(ROOT, "action.y
           `rather than through this helper, which only handles single-line scalars.`,
       );
     }
-    if (raw.length >= 2 && raw.startsWith("'") && raw.endsWith("'")) return raw.slice(1, -1).split("''").join("'");
-    if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) return JSON.parse(raw);
-    return raw;
+    // A quoted scalar ends at its closing quote; anything after it is a trailing
+    // comment, not part of the value. Scanning to the close rather than testing
+    // endsWith is what makes `default: '2000'  # the cap` read as 2000 instead
+    // of "'2000'  # the cap" — a value that would then be stated as fact in
+    // every eval prompt.
+    if (raw.startsWith("'")) return closeQuoted(raw, "'", name).split("''").join("'");
+    if (raw.startsWith('"')) return JSON.parse(`"${closeQuoted(raw, '"', name)}"`);
+    // Unquoted: a `#` only starts a comment when preceded by whitespace.
+    const hash = raw.search(/\s#/);
+    return (hash === -1 ? raw : raw.slice(0, hash)).trim();
   }
   throw new Error(`action.yml: no default found for input \`${name}\``);
 }

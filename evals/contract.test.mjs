@@ -834,6 +834,23 @@ describe("action.yml input defaults", () => {
     assert.equal(actionInputDefault("demo", yml), 'a "quoted" value');
   });
 
+  test("a trailing comment is not part of the value", () => {
+    // `default: '2000'  # the cap` used to read as the whole string, quotes and
+    // comment included — a number this action does not ship, then stated as
+    // fact in every eval prompt's "Diff limits" line.
+    assert.equal(actionInputDefault("demo", "inputs:\n  demo:\n    default: '2000'  # the cap\n"), "2000");
+    assert.equal(actionInputDefault("demo", "inputs:\n  demo:\n    default: 2000 # the cap\n"), "2000");
+  });
+
+  test("a # inside a quoted value is kept", () => {
+    // The comment strip must not run inside the quotes.
+    assert.equal(actionInputDefault("demo", "inputs:\n  demo:\n    default: 'a#b'\n"), "a#b");
+  });
+
+  test("an unterminated quote throws rather than returning a fragment", () => {
+    assert.throws(() => actionInputDefault("demo", "inputs:\n  demo:\n    default: 'oops\n"), /unterminated/);
+  });
+
   test("an input with no default at all throws rather than reading the next input's", () => {
     // The scan must stop at the dedent. Running on would silently return the
     // NEXT input's default — a wrong cap stated as fact in every eval prompt.
