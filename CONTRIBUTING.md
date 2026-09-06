@@ -137,3 +137,25 @@ Method's code-review workflow and the Ralph orchestrator loop. See
 
 By contributing, you agree that your contributions are licensed under the
 Apache License 2.0. See [LICENSE](LICENSE).
+
+## Changing a lens prompt
+
+A change to `lenses/*.md` needs an accompanying eval fixture. See `evals/README.md`.
+
+Write the fixture first and watch it fail, then change the prompt. A prompt fix
+with no failing fixture behind it cannot be distinguished from a prompt fix that
+does nothing, and the next edit will silently regress it — which is how two lens
+regressions reached production.
+
+Keep at least one **must-block** fixture per persona. Without a positive control,
+a false-positive fix can be satisfied by making the lens never block, which is a
+worse failure than the one being fixed.
+
+`node --test evals/contract.test.mjs` and `node evals/validate-fixtures.mjs` run
+offline in CI on every PR — free, deterministic, no key. The model-in-the-loop
+layer (`node evals/run.mjs`) needs `OPENROUTER_API_KEY` and runs on `main` only,
+so run it locally with your own key when touching a persona:
+
+```bash
+OPENROUTER_API_KEY=... node evals/run.mjs --lens acceptance --full
+```

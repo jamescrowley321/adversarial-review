@@ -1,0 +1,11 @@
+{
+  "class": "must-not-block",
+  "smoke": true,
+  "pr_title": "chore(loop): make fixing the CI baseline the loop's first task",
+  "guards": "Incident (healthcloud-console-web#52, #56) \u2014 the Auditor failed four ACs because the PR 'does not contain the workflow files'. The deliverable is the instruction text; the CI work is a separate tracked issue. Ported from #29.",
+  "lenses": {
+    "acceptance": {
+      "block": false
+    }
+  }
+}

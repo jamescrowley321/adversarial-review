@@ -136,6 +136,19 @@ git init /tmp/fx && cd /tmp/fx
 git add -A && git diff --cached -U3 > diff.patch
 ```
 
+## Fixtures ported from production incidents
+
+Five fixtures come from real Acceptance Auditor failures on `healthcloud-console-web`
+(#52, #56, #58) rather than being synthesised here:
+
+| Fixture | What it reproduces |
+|---|---|
+| `acceptance-absent-claim-is-false` | "the implementation is missing" against a diff that contains it |
+| `acceptance-absent-claim-buried-in-noise` | the same PR at its real size — 5,855 insertions, mostly lockfile churn, the real change near the end. Diff volume is the suspected trigger. Non-smoke: it is large. |
+| `acceptance-requirement-invented` | "requires Chromium, Firefox and WebKit" against a config declaring one project |
+| `acceptance-non-implementation-pr` | four ACs failed because the PR "does not contain the workflow files" — the deliverable was the instruction text |
+| `grounding-deleted-guard-must-block` | positive control: an AC says access control is preserved and the diff deletes the check on a visible `-` line |
+
 ## Regression guards
 
 Every documented incident has a guard, and `verify-guards.mjs` proves each guard

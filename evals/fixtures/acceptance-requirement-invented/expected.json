@@ -1,0 +1,11 @@
+{
+  "class": "must-not-block",
+  "smoke": true,
+  "pr_title": "test(e2e): wire Playwright into CI",
+  "guards": "Incident (healthcloud-console-web#58) \u2014 the Auditor blocked claiming the config 'requires Chromium, Firefox and WebKit', citing unnamed previous reviews. The config declares exactly one project, chromium. Ported from #29.",
+  "lenses": {
+    "acceptance": {
+      "block": false
+    }
+  }
+}
