@@ -96,3 +96,40 @@ algorithm in `evals/lib/pi-diff.mjs` reproduces the defect **deliberately** —
 it mirrors the tool rather than improving on it, so a fixture measures what a
 lens actually sees — and pins the behaviour in a test so the port cannot be
 "fixed" into divergence by accident.
+
+---
+
+## 3. `get_pr_diff` wraps the diff in a markdown fence without escaping it
+
+**Where:** `packages/pi-orchestrator/src/pi/tools/get-pr-diff.ts`
+
+```ts
+return diffToolResult(`PR #${pullNumber} Diff:\n\`\`\`diff\n${truncated.text}\n\`\`\``, details);
+```
+
+**What goes wrong.** The diff is interpolated into a fenced block with no
+escaping. A pull request that changes a file containing a line of three
+backticks — a README, a prompt file, any Markdown — closes the fence early. From
+the model's point of view the remainder of that file's contents is no longer
+quoted tool output but ordinary prose in the conversation.
+
+**Impact.** It is a prompt-injection surface, and an easy one: the attacker
+controls the file contents in the PR under review, which is precisely the
+untrusted input the fence exists to delimit. Severity depends on the consumer's
+prompt — this action wraps the tool result in its own `----- BEGIN DIFF UNDER
+REVIEW -----` markers and instructs the lens to treat everything between them as
+data, which limits but does not eliminate the exposure.
+
+**Suggested fix.** Choose a fence longer than the longest backtick run in the
+payload (the CommonMark rule), or drop the fence and delimit with a token that
+cannot occur in a diff.
+
+**Our workaround (partial).** The composed prompt wraps the whole tool result in
+`----- BEGIN/END DIFF UNDER REVIEW -----` markers, and `shared-instructions.md`
+opens with a trust boundary telling the lens that everything it reads through a
+tool is untrusted data and that smuggled instructions are themselves a MUST FIX
+finding. Three fixtures (`injection-diff-comment`, `injection-hidden-unicode`,
+`injection-pr-body`) measure that the lens reports rather than obeys. The port
+in `evals/lib/pi-diff.mjs` reproduces the unescaped fence **deliberately**, for
+the same reason it reproduces the byte-budget defect: a fixture has to show a
+lens what the real tool would have handed it.
