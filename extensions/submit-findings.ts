@@ -84,24 +84,36 @@ export default function submitFindingsExtension(pi: ExtensionAPI) {
     ],
     parameters: PARAMS,
     async execute(_toolCallId, params) {
+      // Every failure here returns a RESULT, never throws. A thrown tool call
+      // is an error the agent has to interpret; a result can carry the one
+      // instruction that recovers the review — emit it in the final message,
+      // where the action's older parser will find it. Losing the tool channel
+      // must cost fidelity, never the review.
+      const fallback = (why: string) => ({
+        content: [
+          {
+            type: "text" as const,
+            text:
+              `submit_findings could not record your review (${why}). ` +
+              `Do not retry this tool. Emit your findings as a single JSON object ` +
+              `in your final message instead — that channel still works.`,
+          },
+        ],
+        details: { recorded: false, findings: params.findings.length },
+      });
+
       const out = process.env.ADVERSARIAL_FINDINGS_PATH;
-      // Fail the CALL, not the run: the action falls back to parsing the final
-      // message, so a misconfigured path costs fidelity, never the review.
       if (!out || !isAbsolute(out)) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text:
-                "submit_findings is not wired up in this environment (ADVERSARIAL_FINDINGS_PATH is unset or not absolute). " +
-                "Emit your findings as a single JSON object in your final message instead.",
-            },
-          ],
-          details: { recorded: false, findings: params.findings.length },
-        };
+        return fallback("ADVERSARIAL_FINDINGS_PATH is unset or not absolute");
       }
 
-      writeFileSync(out, JSON.stringify(params, null, 2), "utf8");
+      try {
+        writeFileSync(out, JSON.stringify(params, null, 2), "utf8");
+      } catch (e) {
+        // ENOSPC, EACCES, EISDIR, a runner with a full disk. Rare, and exactly
+        // the moment when throwing away a completed review is least excusable.
+        return fallback(e instanceof Error ? e.message : String(e));
+      }
 
       return {
         content: [
