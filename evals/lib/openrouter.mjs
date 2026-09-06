@@ -63,9 +63,22 @@ export async function chat({ model, prompt, temperature = 0, maxTokens = 8000, a
       if (body.error) throw new ModelError(`OpenRouter error: ${body.error.message || JSON.stringify(body.error)}`, { retryable: true });
       const choice = body.choices?.[0] ?? {};
       const content = choice.message?.content ?? "";
+      const reply = typeof content === "string" ? content : JSON.stringify(content);
+      const finishReason = choice.finish_reason ?? choice.native_finish_reason ?? null;
+      // A 200 carrying an empty message (OpenRouter reports finish_reason
+      // "error" for an upstream hiccup) is a PROVIDER failure, not a lens that
+      // emitted nothing. Throw it as retryable so the loop above gets another
+      // draw; if it survives all attempts the caller records it as an error
+      // rather than folding it into the lens's JSON-validity score.
+      if (!reply.trim()) {
+        throw new ModelError(
+          `provider returned an empty message for "${model}" (finish_reason=${finishReason})`,
+          { retryable: true },
+        );
+      }
       return {
-        text: typeof content === "string" ? content : JSON.stringify(content),
-        finishReason: choice.finish_reason ?? choice.native_finish_reason ?? null,
+        text: reply,
+        finishReason,
         usage: body.usage || null,
         servedBy: body.provider || null,
         resolvedModel: body.model || model,

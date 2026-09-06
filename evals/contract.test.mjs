@@ -392,6 +392,24 @@ describe("scoring policy", () => {
     assert.doesNotMatch(violations(score([r]), THRESHOLDS).join(" "), /JSON validity/);
   });
 
+  test("an upstream provider error is infrastructure, never lens quality", () => {
+    // Seen live: OpenRouter returned 200 with an empty message and
+    // finish_reason "error". Folding that into JSON-validity would blame the
+    // lens for the provider having a bad minute.
+    const reps = [rep(false), { parsed: false, error: "provider returned an empty message", blocked: null, findings: [] }, rep(false)];
+    const r = foldReps(run(), reps);
+    assert.match(r.reason, /UPSTREAM/);
+    const vs = violations(score([r]), THRESHOLDS).join(" ");
+    assert.match(vs, /failed upstream/);
+    assert.doesNotMatch(vs, /JSON validity/);
+  });
+
+  test("JSON validity is measured over reps the provider actually delivered", () => {
+    const reps = [rep(false), rep(false), { parsed: false, error: "provider blew up", blocked: null, findings: [] }];
+    const l = score([foldReps(run(), reps)]).acceptance;
+    assert.equal(l.jsonValidityRate, 1, "2 of 2 delivered reps parsed — validity is 100%, not 67%");
+  });
+
   test("recall below threshold is a violation", () => {
     const mk = (pass) => foldReps(
       run({ id: pass ? "a" : "b", fx: { class: "must-block", guards: "g" }, expect: { block: true } }),

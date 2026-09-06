@@ -1,44 +1,63 @@
 diff --git a/src/search/useResultNavigation.test.ts b/src/search/useResultNavigation.test.ts
 new file mode 100644
-index 0000000..df6b80b
+index 0000000..281eedb
 --- /dev/null
 +++ b/src/search/useResultNavigation.test.ts
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,64 @@
 +import { renderHook, act } from "@testing-library/react";
 +import { useResultNavigation } from "./useResultNavigation";
 +
++// Three results, so "moves" and "wraps" are distinguishable assertions.
 +const results = [
 +  { id: "a", href: "/a", label: "A" },
 +  { id: "b", href: "/b", label: "B" },
++  { id: "c", href: "/c", label: "C" },
 +];
 +
 +const press = (key: string) =>
 +  Object.assign(new KeyboardEvent("keydown", { key }), { preventDefault: () => {} }) as unknown as KeyboardEvent;
 +
 +describe("useResultNavigation", () => {
-+  it("ArrowDown advances the highlight and wraps at the end", () => {
++  it("ArrowDown moves the highlight forward", () => {
 +    const { result } = renderHook(() => useResultNavigation(results, () => {}));
 +    act(() => result.current.onKeyDown(press("ArrowDown")));
 +    expect(result.current.index).toBe(1);
++    act(() => result.current.onKeyDown(press("ArrowDown")));
++    expect(result.current.index).toBe(2);
++  });
++
++  it("ArrowDown wraps from the last result to the first", () => {
++    const { result } = renderHook(() => useResultNavigation(results, () => {}));
++    act(() => result.current.onKeyDown(press("ArrowDown")));
++    act(() => result.current.onKeyDown(press("ArrowDown")));
 +    act(() => result.current.onKeyDown(press("ArrowDown")));
 +    expect(result.current.index).toBe(0);
 +  });
 +
-+  it("ArrowUp moves back and wraps at the start", () => {
++  it("ArrowUp moves the highlight backward", () => {
++    const { result } = renderHook(() => useResultNavigation(results, () => {}));
++    act(() => result.current.onKeyDown(press("ArrowDown")));
++    expect(result.current.index).toBe(1);
++    act(() => result.current.onKeyDown(press("ArrowUp")));
++    expect(result.current.index).toBe(0);
++  });
++
++  it("ArrowUp wraps from the first result to the last", () => {
 +    const { result } = renderHook(() => useResultNavigation(results, () => {}));
 +    act(() => result.current.onKeyDown(press("ArrowUp")));
-+    expect(result.current.index).toBe(1);
++    expect(result.current.index).toBe(2);
 +  });
 +
 +  it("Enter navigates to the highlighted result's href", () => {
 +    const assign = jest.fn();
 +    Object.defineProperty(window, "location", { value: { assign }, writable: true });
 +    const { result } = renderHook(() => useResultNavigation(results, () => {}));
++    act(() => result.current.onKeyDown(press("ArrowDown")));
 +    act(() => result.current.onKeyDown(press("Enter")));
-+    expect(assign).toHaveBeenCalledWith("/a");
++    expect(assign).toHaveBeenCalledWith("/b");
 +  });
 +
-+  it("Escape closes the dropdown and returns focus to the input", () => {
++  it("Escape closes the dropdown and returns focus to the search input", () => {
 +    const input = document.createElement("input");
 +    input.id = "search-input";
 +    document.body.appendChild(input);

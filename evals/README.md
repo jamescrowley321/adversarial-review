@@ -179,6 +179,11 @@ Recorded honestly rather than tuned until green. See the `known gaps` block in
 Field data from real runs, pinned as contract tests in the `observed live
 failures` block so the behaviour is described rather than rediscovered.
 
+- **The provider returns empty 200s.** OpenRouter intermittently answers with
+  an empty message and `finish_reason: "error"` — 3 of 18 calls on one run. The
+  client retries these, and if they survive retries the scorecard reports them
+  as *provider errors*, excluded from the JSON-validity denominator. A bad
+  minute upstream must never read as a lens that emits invalid output.
 - **Illegal JSON escapes fail a lens outright.** Seen on PR #28: Viper quoted a
   regex in `detail`, wrote a lone backslash, and the job died with `Bad escaped
   character in JSON`. The action fails loud and asks for a re-run rather than

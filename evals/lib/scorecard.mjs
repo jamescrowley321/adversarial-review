@@ -14,6 +14,7 @@ export const THRESHOLDS = {
 export function foldReps(run, reps) {
   const parsed = reps.filter((r) => r.parsed);
   const truncated = reps.filter((r) => r.truncated).length;
+  const providerErrors = reps.filter((r) => r.error).length;
   const verdicts = parsed.map((r) => r.blocked);
   const unanimous = verdicts.length > 0 && verdicts.every((v) => v === verdicts[0]);
   const everBlocked = verdicts.some((v) => v === true);
@@ -32,7 +33,9 @@ export function foldReps(run, reps) {
     pass = false;
     reason = truncated
       ? `${truncated}/${reps.length} rep(s) hit the max-tokens ceiling — a HARNESS limit, not a lens failure. Re-run with --max-tokens higher before reading anything into this row.`
-      : `${reps.length - parsed.length}/${reps.length} rep(s) produced output the action could not accept`;
+      : providerErrors
+        ? `${providerErrors}/${reps.length} rep(s) failed UPSTREAM at the provider after retries — infrastructure, not a lens result. Re-run.`
+        : `${reps.length - parsed.length}/${reps.length} rep(s) produced output the action could not accept`;
   } else if (!unanimous) {
     pass = false;
     reason = `unstable verdict across reps (${verdicts.map((v) => (v ? "BLOCK" : "pass")).join(", ")}) — not a pass`;
@@ -53,7 +56,7 @@ export function foldReps(run, reps) {
   return {
     id: run.id, lens: run.lensKey, class: run.fx.class, guards: run.fx.guards,
     expectBlock: wantBlock, verdicts, unanimous, everBlocked, alwaysBlocked,
-    locationOk, jsonValid: parsed.length, reps: reps.length, truncated, pass, reason,
+    locationOk, jsonValid: parsed.length, reps: reps.length, truncated, providerErrors, pass, reason,
     severities: tally(parsed.flatMap((r) => (r.findings || []).map((f) => f.severity))),
     reps_detail: reps,
   };
@@ -64,18 +67,20 @@ const tally = (xs) => xs.reduce((m, x) => ((m[x] = (m[x] || 0) + 1), m), {});
 export function score(results) {
   const byLens = {};
   for (const r of results) {
-    const l = (byLens[r.lens] ||= { lens: r.lens, mustBlock: [], mustNotBlock: [], jsonValid: 0, repsTotal: 0, unstable: 0, truncated: 0 });
+    const l = (byLens[r.lens] ||= { lens: r.lens, mustBlock: [], mustNotBlock: [], jsonValid: 0, repsTotal: 0, unstable: 0, truncated: 0, providerErrors: 0 });
     (r.class === "must-block" ? l.mustBlock : l.mustNotBlock).push(r);
     l.jsonValid += r.jsonValid;
     l.repsTotal += r.reps;
     l.truncated += r.truncated || 0;
+    l.providerErrors += r.providerErrors || 0;
     if (!r.unanimous) l.unstable++;
   }
   for (const l of Object.values(byLens)) {
     l.recall = l.mustBlock.length ? l.mustBlock.filter((r) => r.pass).length / l.mustBlock.length : null;
     l.falsePositives = l.mustNotBlock.filter((r) => r.everBlocked).length;
     l.falsePositiveRate = l.mustNotBlock.length ? l.falsePositives / l.mustNotBlock.length : null;
-    l.jsonValidityRate = l.repsTotal ? l.jsonValid / l.repsTotal : null;
+    const delivered = l.repsTotal - l.providerErrors;
+    l.jsonValidityRate = delivered > 0 ? l.jsonValid / delivered : null;
     l.stability = results.length ? 1 - l.unstable / (l.mustBlock.length + l.mustNotBlock.length) : null;
   }
   return byLens;
@@ -91,7 +96,9 @@ export function violations(byLens, thresholds = THRESHOLDS) {
     if (l.recall != null && l.recall < thresholds.mustBlockRecall) {
       out.push(`${l.lens}: must-block recall ${pct(l.recall)} < ${pct(thresholds.mustBlockRecall)}`);
     }
-    if (l.truncated) {
+    if (l.providerErrors) {
+      out.push(`${l.lens}: ${l.providerErrors} rep(s) failed upstream at the provider after retries — infrastructure, not lens quality; re-run`);
+    } else if (l.truncated) {
       out.push(`${l.lens}: ${l.truncated} rep(s) truncated at the max-tokens ceiling — harness limit; raise --max-tokens and re-run, do not read this as lens quality`);
     } else if (l.jsonValidityRate != null && l.jsonValidityRate < thresholds.jsonValidity) {
       out.push(`${l.lens}: JSON validity ${pct(l.jsonValidityRate)} < ${pct(thresholds.jsonValidity)}`);
@@ -113,10 +120,10 @@ export function renderScorecard({ byLens, results, meta, violations: vs }) {
   L.push(`- **Action ref:** \`${meta.ref || "working tree"}\``);
   L.push(`- **Result:** ${vs.length ? `❌ ${vs.length} violation(s)` : "✅ within thresholds"}`);
   L.push("");
-  L.push("| Lens | must-block recall | must-not-block FP rate | JSON validity | verdict stability |");
-  L.push("|---|---|---|---|---|");
+  L.push("| Lens | must-block recall | must-not-block FP rate | JSON validity | verdict stability | provider errors |");
+  L.push("|---|---|---|---|---|---|");
   for (const l of Object.values(byLens).sort((a, b) => a.lens.localeCompare(b.lens))) {
-    L.push(`| \`${l.lens}\` | ${pct(l.recall)} (${l.mustBlock.filter((r) => r.pass).length}/${l.mustBlock.length}) | ${pct(l.falsePositiveRate)} (${l.falsePositives}/${l.mustNotBlock.length}) | ${pct(l.jsonValidityRate)} | ${pct(l.stability)} |`);
+    L.push(`| \`${l.lens}\` | ${pct(l.recall)} (${l.mustBlock.filter((r) => r.pass).length}/${l.mustBlock.length}) | ${pct(l.falsePositiveRate)} (${l.falsePositives}/${l.mustNotBlock.length}) | ${pct(l.jsonValidityRate)} | ${pct(l.stability)} | ${l.providerErrors}/${l.repsTotal} |`);
   }
   L.push("");
 
