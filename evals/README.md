@@ -174,6 +174,20 @@ Recorded honestly rather than tuned until green. See the `known gaps` block in
   ("Security Review Agent"). Drop the `todo` flags in the PR that fixes it and
   they become permanent guards.
 
+## Observed live failure modes
+
+Field data from real runs, pinned as contract tests in the `observed live
+failures` block so the behaviour is described rather than rediscovered.
+
+- **Illegal JSON escapes fail a lens outright.** Seen on PR #28: Viper quoted a
+  regex in `detail`, wrote a lone backslash, and the job died with `Bad escaped
+  character in JSON`. The action fails loud and asks for a re-run rather than
+  guessing at a repair — that is the documented design — but it makes any lens
+  that quotes regexes or Windows paths a flake source, and the gate's
+  fail-closed "missing lens" branch turns that flake into a blocked merge.
+  Whether the parser should repair common bad escapes is a live question; the
+  test asserts today's behaviour so a change to it is deliberate and visible.
+
 ## Ground rules
 
 - **Do not change a lens prompt and eval it in the same PR.** Establish the

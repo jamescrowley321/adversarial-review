@@ -297,6 +297,47 @@ describe("merge gate", () => {
   });
 });
 
+// ─────────────────── Observed live failures (field data) ───────────────────
+// Failure shapes seen on a real run of this action, pinned here so the
+// behaviour is described rather than rediscovered. These assert what the action
+// does TODAY. If a future change makes the parser recover from one, flip the
+// assertion in that PR — deliberately, with the recovery visible in the diff.
+
+describe("observed live failures", () => {
+  // Seen on PR #28 (2026-09-06): Viper's job died with
+  //   agent response was not valid JSON (Bad escaped character at position 1845)
+  // The model wrote a lone backslash inside `detail` — typically quoting a regex
+  // or a Windows path — which is not a legal JSON escape. The action fails the
+  // lens loudly and asks for a re-run rather than guessing at a repair. That is
+  // the documented design (fail loud, no automatic retry), but it does mean a
+  // lens that quotes regexes is a flake source, and the gate's fail-closed
+  // "missing lens" branch turns that flake into a blocked merge.
+  test("an illegal escape sequence fails the lens with an actionable message", async () => {
+    const raw = '{"lens":"Viper","summary":"s","findings":[{"severity":"MUST FIX",' +
+      // `\\d` in this JS literal is one backslash + "d" in the string, which is
+      // an illegal escape once it lands inside JSON — the exact shape observed.
+      '"location":"src/a.js:1","detail":"the pattern \\d+ is unanchored",' +
+      '"recommendation":"anchor it"}]}';
+    const r = await runParseStep({ lensName: "Viper", agentResponse: raw });
+    assert.notEqual(r.failed, null, "invalid JSON must not post a review");
+    assert.equal(r.posted, false);
+    assert.match(String(r.failed), /not valid JSON/);
+    assert.match(String(r.failed), /Re-run this job/, "the message must tell a human what to do");
+  });
+
+  // The same content, escaped correctly, must sail through — otherwise the test
+  // above is just asserting that JSON parsing exists.
+  test("the same finding with a correctly escaped backslash parses", async () => {
+    const ok = JSON.stringify({
+      lens: "Viper", summary: "s",
+      findings: [{ severity: "MUST FIX", location: "src/a.js:1", detail: "the pattern \\d+ is unanchored", recommendation: "anchor it" }],
+    });
+    const r = await runParseStep({ lensName: "Viper", agentResponse: ok });
+    assert.equal(r.failed, null);
+    assert.equal(r.event, "REQUEST_CHANGES");
+  });
+});
+
 // ───────────────────────── Scoring policy ─────────────────────────
 // The exit policy is what turns a scorecard into a gate. It gets its own
 // offline coverage so a scoring regression cannot quietly make every run green.
