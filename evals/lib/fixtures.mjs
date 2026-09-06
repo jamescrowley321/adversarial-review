@@ -39,19 +39,20 @@ export function loadFixture(id) {
 }
 
 /**
- * The exact preamble action.yml prepends before the persona. Reproduced here so
- * we can slice it off; if the action changes it, composePrompt fails loudly
- * rather than silently evaluating a prompt CI never sends.
+ * The action's TARGETING sentence — the one part of its preamble that only makes
+ * sense with tools attached, and so the only part an offline eval must replace.
+ * Matched as a pattern, not compared as a fixed string: the compose step also
+ * prepends other grounding (e.g. the run date), and that grounding should be
+ * exercised by the evals, not silently dropped. If the targeting sentence itself
+ * changes shape, composePrompt fails loudly rather than evaluating a prompt CI
+ * never sends.
  */
-function productionPreamble() {
-  const [owner, name] = EVAL_REPO.split("/");
-  return (
-    `You are reviewing GitHub pull request #${EVAL_PR} in repository ` +
-    `\`${EVAL_REPO}\`. When you call \`get_pr_diff\` or \`get_issue_or_pr_thread\`, pass ` +
-    `exactly owner=\`${owner}\`, repo=\`${name}\`, pull_number=${EVAL_PR}. ` +
-    `Do not guess or try other owner/repo values.\n\n`
-  );
-}
+const TARGETING = new RegExp(
+  "^You are reviewing GitHub pull request #\\d+ in repository `[^`]+`\\. " +
+  "When you call `get_pr_diff` or `get_issue_or_pr_thread`, pass " +
+  "exactly owner=`[^`]+`, repo=`[^`]+`, pull_number=\\d+\\. " +
+  "Do not guess or try other owner/repo values\\.\\n\\n",
+);
 
 /** Run the action's compose step and return `persona + shared-instructions`. */
 export function composeFromAction(lensKey) {
@@ -68,14 +69,15 @@ export function composeFromAction(lensKey) {
       const m = raw.match(/^COMPOSED_PROMPT<<(\S+)\n([\s\S]*)\n\1\n?$/);
       if (!m) throw new Error("could not read COMPOSED_PROMPT back from the compose step");
       const full = m[2];
-      const pre = productionPreamble();
-      if (!full.startsWith(pre)) {
+      if (!TARGETING.test(full)) {
         throw new Error(
-          "action.yml's compose step no longer emits the expected PR-context preamble. " +
-            "Update productionPreamble() in evals/lib/fixtures.mjs so evals keep exercising the real prompt.",
+          "action.yml's compose step no longer opens with the expected tool-targeting sentence. " +
+            "Update TARGETING in evals/lib/fixtures.mjs so evals keep exercising the real prompt.",
         );
       }
-      return full.slice(pre.length);
+      // Drop only the targeting sentence; keep every other line the action
+      // prepends, so added grounding is under test rather than stripped.
+      return full.replace(TARGETING, "");
     }).finally(() => rmSync(dir, { recursive: true, force: true }));
   } catch (e) {
     rmSync(dir, { recursive: true, force: true });
