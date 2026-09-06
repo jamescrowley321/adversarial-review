@@ -1,3 +1,4 @@
 ## Summary
 
-Pure arithmetic utility, no AI/LLM surface. The OWASP LLM lens activation gate must fire: body starts with its header then the 'Skipped — no LLM/AI surface' line.
+Pulls the invoice rounding arithmetic into one helper so the billing job and
+the PDF renderer stop disagreeing on half-cent totals.

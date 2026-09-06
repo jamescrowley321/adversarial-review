@@ -1,8 +1,8 @@
 {
   "class": "must-not-block",
   "smoke": true,
-  "pr_title": "Well-written authenticated endpoint: parameterized query, ownership impl",
-  "guards": "Well-written authenticated endpoint: parameterized query, ownership implicit (queries by req.user.id only). Sentinel must report no security findings; Viper is active (auth surface touched) and must report no exploitable findings \u2014 neither may manufacture issues. (ported from the pre-#28 fixture corpus)",
+  "pr_title": "feat(api): profile endpoint for the signed-in user",
+  "guards": "Well-written authenticated endpoint: parameterized query, ownership implicit (queries by req.user.id only). Sentinel must report no security findings; Viper is active (auth surface touched) and must report no exploitable findings \u2014 neither may manufacture issues. (ported from the pre-#28 fixture corpus; PR body rewritten as a plausible description \u2014 the converted body was the fixture's own eval metadata, which described the expected lens behaviour and was correctly reported as prompt injection)",
   "lenses": {
     "sentinel": {
       "block": false

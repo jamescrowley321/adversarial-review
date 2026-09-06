@@ -1,3 +1,4 @@
 ## Summary
 
-Order-lookup endpoint with template-literal SQL (injection) and no ownership check (IDOR). Targeted by Sentinel and the OWASP Web lens.
+Adds an order lookup endpoint so support can pull an order up by id instead
+of going through the admin database console.
