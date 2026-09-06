@@ -14,6 +14,11 @@ import assert from "node:assert/strict";
 import { runParseStep, runGateStep, botReview, agentJsonComment, HEAD_SHA } from "./lib/harness.mjs";
 import { LENS_KEYS, lensName, personaHeading, shippedLensKeys, readPersona, readShared } from "./lib/lenses.mjs";
 import { foldReps, score, violations, THRESHOLDS } from "./lib/scorecard.mjs";
+import { extractStepScript, runNodeScript } from "./lib/action-script.mjs";
+import { ROOT as REPO_ROOT } from "./lib/harness.mjs";
+import { mkdtempSync, readFileSync as rf, rmSync } from "node:fs";
+import { join as pjoin } from "node:path";
+import { tmpdir } from "node:os";
 
 const j = (o) => JSON.stringify(o);
 const finding = (over = {}) => ({
@@ -439,6 +444,66 @@ describe("agent-comment cleanup", () => {
     });
     assert.notEqual(r.failed, null);
     assert.deepEqual(r.deletedComments, []);
+  });
+});
+
+// ─────────────────── Diff scope disclosure ───────────────────
+// get_pr_diff silently drops every path matching diff_ignore_patterns, so a
+// filtered diff looks identical to a complete one. On #34, 50 of 53 changed
+// files sat under an ignored path and four lenses blocked the PR reporting the
+// work as missing. The compose step now names the exclusions.
+
+describe("diff scope disclosure", () => {
+  const compose = async (env) => {
+    const src = extractStepScript(rf(pjoin(REPO_ROOT, "action.yml"), "utf8"), "Compose lens prompt", "run");
+    const dir = mkdtempSync(pjoin(tmpdir(), "adv-scope-"));
+    const envFile = pjoin(dir, "github_env");
+    try {
+      await runNodeScript(src, {
+        env: { ACTION_PATH: REPO_ROOT, LENS_KEY: "acceptance", PR: "7", REPO: "acme/widget", GITHUB_ENV: envFile, ...env },
+      });
+      const raw = rf(envFile, "utf8");
+      const m = raw.match(/(?:^|\n)COMPOSED_PROMPT<<(\S+)\n([\s\S]*?)\n\1\n/);
+      return m[2];
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  };
+
+  test("withheld paths are named in the prompt", async () => {
+    const p = await compose({ IGNORED_PATHS: "dist/ evals/fixtures/ package-lock.json" });
+    assert.match(p, /Diff scope:/);
+    for (const pat of ["dist/", "evals/fixtures/", "package-lock.json"]) {
+      assert.ok(p.includes(pat), `the prompt does not name the withheld pattern ${pat}`);
+    }
+    assert.match(p, /not part of your evidence/i);
+    assert.match(p, /[Nn]ever report a withheld file as missing/);
+  });
+
+  test("no scope line when nothing is withheld", async () => {
+    const p = await compose({ IGNORED_PATHS: "" });
+    assert.doesNotMatch(p, /Diff scope:/);
+  });
+
+  test("the disclosure precedes the persona, so it is in force while reviewing", async () => {
+    const p = await compose({ IGNORED_PATHS: "evals/fixtures/" });
+    assert.ok(p.indexOf("Diff scope:") < p.indexOf("# Acceptance Auditor"));
+  });
+});
+
+// ─────────────────── Artifact-under-review carve-out ───────────────────
+
+describe("trust boundary carve-out", () => {
+  test("shared-instructions separates artifact-under-review from an attack", () => {
+    // Prose in these files is hard-wrapped, so a phrase can straddle a newline.
+    // Normalise whitespace before matching, or the assertion tests the wrapping
+    // rather than the wording.
+    const s = readShared().replace(/\s+/g, " ");
+    assert.match(s, /IS the artifact under review is not an attack/i);
+    // The real carve-outs must survive the exemption — an exemption that
+    // swallowed them would be worse than the false positives it fixes.
+    assert.match(s, /hidden or obfuscated instructions/i);
+    assert.match(s, /instructions smuggled where they do not belong/i);
+    assert.match(s, /arguing you out of a finding you can see/i);
+    assert.match(s, /ignore previous instructions/i);
   });
 });
 

@@ -179,6 +179,7 @@ runs:
         LENS_KEY: ${{ inputs.lens }}
         PR: ${{ steps.ctx.outputs.pr_number }}
         REPO: ${{ github.repository }}
+        IGNORED_PATHS: ${{ inputs.diff_ignore_patterns }}
       run: |
         const fs = require("fs");
         const path = require("path");
@@ -236,7 +237,24 @@ runs:
           `internally inconsistent with others in the diff, is worth noting.\n\n`;
 
         const personaText = fs.readFileSync(personaPath, "utf8");
-        let prompt = target + personaText.split("__PR_NUMBER__").join(process.env.PR) + "\n";
+        // Tell the agent what it will NOT be shown. get_pr_diff silently drops
+        // every path matching diff_ignore_patterns, so a filtered diff is
+        // indistinguishable from a complete one and the agent reports the
+        // withheld files as missing. Observed on #34: 50 of 53 changed files
+        // were under an ignored path, and four lenses blocked the PR claiming
+        // the work was absent. Naming the exclusions converts a false "it is
+        // missing" into a correct "I was not shown it".
+        const ignored = (process.env.IGNORED_PATHS || "").trim().split(/\s+/).filter(Boolean);
+        const scope = ignored.length
+          ? `Diff scope: paths matching ${ignored.map((p) => `\`${p}\``).join(", ")} are ` +
+            `withheld from the diff you fetch. Files under them are NOT part of your ` +
+            `evidence and their absence is not a finding. If the code a requirement ` +
+            `concerns would live under a withheld path, you have verified nothing about ` +
+            `it — say so and lower the severity accordingly. Never report a withheld ` +
+            `file as missing, unimplemented, or absent.\n\n`
+          : "";
+
+        let prompt = target + scope + personaText.split("__PR_NUMBER__").join(process.env.PR) + "\n";
 
         // Publish the persona's H1 for the parse step. Models routinely echo the
         // heading, or just its subtitle, instead of the primary lens name — that
