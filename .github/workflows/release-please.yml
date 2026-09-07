@@ -61,20 +61,38 @@ jobs:
     permissions:
       contents: write # release commits, tags, GitHub Releases, and moving the major tag
       pull-requests: write # open / update the release PR
-    env:
-      # The `secrets` context is NOT available in a step-level `if:` — a
-      # workflow using it there fails to PARSE, which takes the whole file down
-      # rather than skipping a step. `env` is available, so the token is lifted
-      # here once and every condition below tests env.RELEASE_TOKEN instead.
-      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
     steps:
+      # The `secrets` context is NOT available in a step-level `if:` — a
+      # workflow using it there fails to PARSE, taking the whole file down
+      # rather than skipping a step. So the conditions below test a boolean
+      # instead of the secret.
+      #
+      # Deliberately NOT a job-level `env:`. That would parse, but it puts the
+      # token in the environment of EVERY step in this job, including two
+      # third-party actions that have no business seeing it. This step is the
+      # only one that reads the secret without needing it, and all it emits is
+      # "true" or "false"; the token itself still reaches only the two steps
+      # that actually use it, through `with:` and a step-scoped `env:`.
+      - name: Detect a configured release identity
+        id: cfg
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${RELEASE_TOKEN:-}" ]; then
+            echo "have_pat=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_pat=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Short-lived (1 hour), repo-scoped, minimum permissions: Contents R/W to
       # push the release branch and publish the Release, Pull requests R/W to
       # open and update the release PR. Nothing else. Skipped entirely when the
       # variable is unset, which is what makes this a safe no-op before setup.
       - name: Mint a release token
         id: apptoken
-        if: ${{ env.RELEASE_TOKEN == '' && vars.RELEASE_APP_ID != '' }}
+        if: ${{ steps.cfg.outputs.have_pat == 'false' && vars.RELEASE_APP_ID != '' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
@@ -85,7 +103,7 @@ jobs:
         with:
           # App token when configured, so the release PR gets CI; otherwise the
           # default token and the old admin-merge behaviour.
-          token: ${{ env.RELEASE_TOKEN || steps.apptoken.outputs.token || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN || steps.apptoken.outputs.token || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
@@ -98,9 +116,9 @@ jobs:
       # GITHUB_TOKEN would arm a PR whose required checks can never run, which
       # is a trap rather than an automation.
       - name: Let the release PR merge itself once CI is green
-        if: ${{ (env.RELEASE_TOKEN != '' || steps.apptoken.outputs.token != '') && steps.release.outputs.pr != '' }}
+        if: ${{ (steps.cfg.outputs.have_pat == 'true' || steps.apptoken.outputs.token != '') && steps.release.outputs.pr != '' }}
         env:
-          GH_TOKEN: ${{ env.RELEASE_TOKEN || steps.apptoken.outputs.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || steps.apptoken.outputs.token }}
           PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
           set -euo pipefail
