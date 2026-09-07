@@ -6,7 +6,7 @@ rewrites `CHANGELOG.md` from the Conventional Commits since the last tag.
 Merging that PR publishes the `vX.Y.Z` GitHub Release, and the same run advances
 the `vX` major tag that consumers pin.
 
-## Why a GitHub App token
+## Why a second identity is needed
 
 A pull request **opened with `GITHUB_TOKEN` triggers no workflows.** That is a
 deliberate GitHub safeguard against workflows recursively triggering workflows,
@@ -18,13 +18,42 @@ pass, so the PR sits `BLOCKED` with **zero checks**, forever.
 That is not a hypothesis: v1.7.2 was merged with `gh pr merge --admin`, and PR
 #38 (`release 1.8.0`) sat blocked with 0 checks until this was fixed.
 
-A GitHub App token fixes it at the root. PRs authored by an app **do** trigger
-workflows, so the release PR gets real CI and merges on green like anything else.
+Any identity that is not `GITHUB_TOKEN` fixes it. A pull request authored by a
+PAT or a GitHub App **does** trigger workflows, so the release PR gets real CI
+and merges on green like anything else.
 
-## One-time setup
+The workflow accepts either, and uses the first one it finds. Until one is
+configured it falls back to `GITHUB_TOKEN` and behaves exactly as before —
+release PRs still need an admin merge, nothing breaks.
 
-Until this is done the workflow falls back to `GITHUB_TOKEN` and behaves exactly
-as it did before — release PRs still need an admin merge, nothing breaks.
+## Option 1 — a PAT (one secret, simplest)
+
+Create a **fine-grained** token at
+<https://github.com/settings/personal-access-tokens/new>:
+
+- **Repository access:** Only select repositories → `adversarial-review`
+- **Permissions:** Contents → Read and write, Pull requests → Read and write
+- **Expiration:** whatever you are willing to rotate
+
+Then, from a checkout:
+
+```bash
+gh secret set RELEASE_TOKEN --repo jamescrowley321/adversarial-review
+# paste the token, press Ctrl-D
+```
+
+That is it. The next push to `main` recreates the release PR under that
+identity, CI runs on it, and it merges itself when green.
+
+**The trade-off:** a PAT acts as *you*. Anything it does appears in the audit
+log under your account, it carries your access for as long as it lives, and it
+has to be rotated by hand when it expires.
+
+## Option 2 — a GitHub App (more setup, better hygiene)
+
+Worth it if you would rather the release identity not be a person: an App is
+scoped to the repo it is installed on, cannot outlive the install, and the token
+it mints expires in an hour.
 
 1. **Create the app** — <https://github.com/settings/apps/new>. Name it something
    like `adversarial-review-releases`. Uncheck **Webhook → Active**.
@@ -41,19 +70,24 @@ as it did before — release PRs still need an admin merge, nothing breaks.
 
 3. **Generate a private key** on the app's page and download the `.pem`.
 
-4. **Add the credentials to this repo:**
-   - Settings → Secrets and variables → Actions → **Variables** →
-     `RELEASE_APP_ID` = the app's numeric App ID (this is not a secret)
-   - Settings → Secrets and variables → Actions → **Secrets** →
-     `RELEASE_APP_PRIVATE_KEY` = the entire `.pem`, including the
-     `-----BEGIN...-----` and `-----END...-----` lines
+4. **Add the credentials:**
 
-5. **Delete the `.pem`** from your machine. It can be regenerated at any time,
-   and a key sitting in `~/Downloads` is the likeliest way this leaks.
+   ```bash
+   gh variable set RELEASE_APP_ID --repo jamescrowley321/adversarial-review --body "<numeric app id>"
+   gh secret set RELEASE_APP_PRIVATE_KEY --repo jamescrowley321/adversarial-review < path/to/key.pem
+   ```
 
-That is the whole change. The next push to `main` mints a token, recreates the
-release PR under the app identity, CI runs on it, and it merges itself when
-green.
+5. **Delete the `.pem`.** It can be regenerated any time, and a key sitting in
+   `~/Downloads` is the likeliest way this leaks.
+
+`RELEASE_TOKEN` wins if both are set, so you can migrate either direction
+without a workflow edit.
+
+## Neither is creatable from the CLI
+
+Both a PAT and an App must be created in the browser — GitHub has no API for
+minting either, by design. Everything *after* creation is scriptable, which is
+why the commands above are given rather than click paths.
 
 ## What is deliberately still manual
 
