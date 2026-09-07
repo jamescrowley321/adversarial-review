@@ -61,6 +61,12 @@ jobs:
     permissions:
       contents: write # release commits, tags, GitHub Releases, and moving the major tag
       pull-requests: write # open / update the release PR
+    env:
+      # The `secrets` context is NOT available in a step-level `if:` — a
+      # workflow using it there fails to PARSE, which takes the whole file down
+      # rather than skipping a step. `env` is available, so the token is lifted
+      # here once and every condition below tests env.RELEASE_TOKEN instead.
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
     steps:
       # Short-lived (1 hour), repo-scoped, minimum permissions: Contents R/W to
       # push the release branch and publish the Release, Pull requests R/W to
@@ -68,7 +74,7 @@ jobs:
       # variable is unset, which is what makes this a safe no-op before setup.
       - name: Mint a release token
         id: apptoken
-        if: ${{ secrets.RELEASE_TOKEN == '' && vars.RELEASE_APP_ID != '' }}
+        if: ${{ env.RELEASE_TOKEN == '' && vars.RELEASE_APP_ID != '' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
@@ -79,7 +85,7 @@ jobs:
         with:
           # App token when configured, so the release PR gets CI; otherwise the
           # default token and the old admin-merge behaviour.
-          token: ${{ secrets.RELEASE_TOKEN || steps.apptoken.outputs.token || secrets.GITHUB_TOKEN }}
+          token: ${{ env.RELEASE_TOKEN || steps.apptoken.outputs.token || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
@@ -92,9 +98,9 @@ jobs:
       # GITHUB_TOKEN would arm a PR whose required checks can never run, which
       # is a trap rather than an automation.
       - name: Let the release PR merge itself once CI is green
-        if: ${{ (secrets.RELEASE_TOKEN != '' || steps.apptoken.outputs.token != '') && steps.release.outputs.pr != '' }}
+        if: ${{ (env.RELEASE_TOKEN != '' || steps.apptoken.outputs.token != '') && steps.release.outputs.pr != '' }}
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || steps.apptoken.outputs.token }}
+          GH_TOKEN: ${{ env.RELEASE_TOKEN || steps.apptoken.outputs.token }}
           PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
           set -euo pipefail

@@ -71,6 +71,31 @@ jobs:
       - name: Validate the example workflow parses as YAML
         run: npx --yes js-yaml@4 examples/caller-workflow.yml > /dev/null
 
+      # `secrets` is not among the contexts available to an `if:`. Using it
+      # there does not skip the step — the whole workflow FAILS TO PARSE, so
+      # one bad condition takes the entire file offline. That shipped once:
+      # release-please.yml stopped running the moment it merged, and nothing
+      # caught it because a workflow's expressions are only parsed when it is
+      # dispatched, which never happens on a pull request.
+      - name: No `secrets` in a workflow `if:`
+        shell: node {0}
+        run: |
+          const fs = require("fs");
+          const dir = ".github/workflows";
+          const bad = [];
+          for (const f of fs.readdirSync(dir).filter((n) => /\.ya?ml$/.test(n))) {
+            fs.readFileSync(`${dir}/${f}`, "utf8").split("\n").forEach((line, i) => {
+              // Conditions only: `env:` and `with:` may reference secrets freely.
+              if (/^\s*if:/.test(line) && /\bsecrets\./.test(line)) bad.push(`${f}:${i + 1}: ${line.trim()}`);
+            });
+          }
+          if (bad.length) {
+            console.log(`::error::the \`secrets\` context is not available in \`if:\` — these conditions make the whole workflow fail to parse:\n${bad.join("\n")}\n` +
+              `Lift the secret to a job-level \`env:\` and test that instead.`);
+            process.exit(1);
+          }
+          console.log("OK: no workflow condition references `secrets`.");
+
   # The version bump is derived from commit messages, so a mistyped type is a
   # mis-versioned release. That was survivable while a human merged every
   # release PR by hand; once releases merge themselves, nothing else is looking.
