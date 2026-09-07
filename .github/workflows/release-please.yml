@@ -25,10 +25,15 @@
 #   workflows, so the release PR gets real CI and can merge on green like any
 #   other change.
 #
-#   Set repo variable RELEASE_APP_ID and secret RELEASE_APP_PRIVATE_KEY to turn
-#   this on (see docs/releases.md). Until then the workflow falls back to
-#   GITHUB_TOKEN and behaves exactly as before — release PRs still need an admin
-#   merge, but nothing breaks.
+#   Any non-GITHUB_TOKEN identity works. Two supported, in priority order:
+#     1. secrets.RELEASE_TOKEN — a PAT (fine-grained: Contents R/W, Pull
+#        requests R/W, this repo only). Simplest; one secret.
+#     2. vars.RELEASE_APP_ID + secrets.RELEASE_APP_PRIVATE_KEY — a GitHub App.
+#        More setup, better hygiene: not tied to a person, cannot outlive the
+#        install, and the token it mints expires in an hour.
+#   Neither configured: falls back to GITHUB_TOKEN and behaves exactly as
+#   before — release PRs still need an admin merge, but nothing breaks.
+#   See docs/releases.md.
 #
 # Scope, deliberately: this workflow runs ONLY on push-to-main and manual
 # dispatch. It never runs on a `pull_request` event, so no fork or outside
@@ -63,7 +68,7 @@ jobs:
       # variable is unset, which is what makes this a safe no-op before setup.
       - name: Mint a release token
         id: apptoken
-        if: ${{ vars.RELEASE_APP_ID != '' }}
+        if: ${{ secrets.RELEASE_TOKEN == '' && vars.RELEASE_APP_ID != '' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
@@ -74,7 +79,7 @@ jobs:
         with:
           # App token when configured, so the release PR gets CI; otherwise the
           # default token and the old admin-merge behaviour.
-          token: ${{ steps.apptoken.outputs.token || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN || steps.apptoken.outputs.token || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
@@ -83,13 +88,13 @@ jobs:
       # would rather eyeball every version bump. Auto-merge waits for branch
       # protection, so a red check still stops the release.
       #
-      # Gated on the App token: enabling auto-merge under GITHUB_TOKEN would arm
-      # a PR whose required checks can never run, which is a trap rather than an
-      # automation.
+      # Gated on a real identity being configured: enabling auto-merge under
+      # GITHUB_TOKEN would arm a PR whose required checks can never run, which
+      # is a trap rather than an automation.
       - name: Let the release PR merge itself once CI is green
-        if: ${{ steps.apptoken.outputs.token != '' && steps.release.outputs.pr != '' }}
+        if: ${{ (secrets.RELEASE_TOKEN != '' || steps.apptoken.outputs.token != '') && steps.release.outputs.pr != '' }}
         env:
-          GH_TOKEN: ${{ steps.apptoken.outputs.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || steps.apptoken.outputs.token }}
           PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
           set -euo pipefail
