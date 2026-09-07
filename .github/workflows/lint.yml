@@ -110,7 +110,8 @@ jobs:
           for (const f of fs.readdirSync(dir).filter((n) => /\.ya?ml$/.test(n))) {
             for (const c of conditions(fs.readFileSync(`${dir}/${f}`, "utf8"))) {
               // Conditions only: `env:` and `with:` may reference secrets freely.
-              if (/\bsecrets\./.test(c.value)) bad.push(`${f}:${c.line}: ${c.value.trim().split("\n")[0]}`);
+              // Both access forms: `secrets.NAME` and `secrets['NAME']`.
+              if (/\bsecrets\s*[.[]/.test(c.value)) bad.push(`${f}:${c.line}: ${c.value.trim().split("\n")[0]}`);
             }
           }
 
