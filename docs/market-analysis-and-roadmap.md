@@ -1,7 +1,7 @@
-# Automated / AI Code-Review Landscape — Market Analysis & Long-Term Roadmap for `adversarial-review`
+# Automated / AI Code-Review Landscape — Market Analysis & Long-Term Roadmap for `blind-peer-review`
 
 > **Scope.** A current (2026) competitive analysis of the automated / AI code-review
-> tool and plugin landscape, and a phased roadmap for **adversarial-review** — the
+> tool and plugin landscape, and a phased roadmap for **blind-peer-review** — the
 > open-source (Apache-2.0), harness-neutral, multi-lens, fail-closed PR-review gate
 > in this repo.
 >
@@ -10,7 +10,7 @@
 > in this market move fast and most compliance claims (SOC 2, HIPAA, ISO) are vendor
 > self-attestations — treated as such. Where a claim rests on one aggregator or a
 > JS-rendered page we could not confirm, it is marked **(unverified)**. The point of
-> this document is a *skeptical* read; adversarial-review's position is deliberately
+> this document is a *skeptical* read; blind-peer-review's position is deliberately
 > not overstated. **The single most important finding for positioning:** the
 > "harness-neutral portable persona library" idea is **not** a defensible moat — it
 > is already a crowded, proven pattern (see §5). The defensible combination is
@@ -34,7 +34,7 @@
    `COMMENT` review — it cannot `REQUEST_CHANGES`, cannot satisfy CODEOWNERS, and
    cannot block a merge**; GitHub even *walked back* auto-adding Copilot as a
    reviewer on **2026-08-07**. GitLab Duo and BugBot are likewise advisory by
-   default. [S5][S9] **This is the gap adversarial-review is built on.**
+   default. [S5][S9] **This is the gap blind-peer-review is built on.**
 4. **A fail-closed merge gate is the real dividing line**, and it is *not* rare —
    but it is unevenly distributed. Confident hard-gate capability: CodeRabbit
    (Pre-Merge Checks), Qodo (compliance gate + required check), CodeAnt, Codacy,
@@ -67,7 +67,7 @@
    which itself hits **end-of-support 2027-04-30** (new signups end **2026-05-15**) →
    migrate to **Kiro**. Three products in two years. [S21][S22]
 10. **The OSS "adversarial / multi-persona reviewer" niche is real but immature and
-    fragmented** — and adversarial-review is *not* alone in it. Closest analogs:
+    fragmented** — and blind-peer-review is *not* alone in it. Closest analogs:
     `addyosmani/adverse` (MIT, harness-neutral, 3 personas, CI exit-code gate, tiny),
     `spencermarx/open-code-review` (Apache-2.0, 28 personas, 13+ harnesses, **no
     gate**), and a **same-named `robertoecf/adversarial-review`** (MIT, multi-harness,
@@ -84,10 +84,10 @@
     **OWASP-LLM/GenAI (2026) lens** and an **injection-hardened trust boundary**
     (three-tool allowlist, no reading reviewer instructions from the untrusted
     checkout). No SaaS incumbent is OSS + BYO-any-model + injection-doc'd; no OSS
-    analog is a hardened CI gate. That overlap is adversarial-review's wedge. [S28][S29]
+    analog is a hardened CI gate. That overlap is blind-peer-review's wedge. [S28][S29]
 13. **OWASP timing is favorable.** The **OWASP Top 10 for LLM Applications 2026** was
     published **2026-08-04** with **LLM01 Prompt Injection still #1** — the exact risk
-    adversarial-review both *hardens against* and *reviews for*. This is a credible,
+    blind-peer-review both *hardens against* and *reviews for*. This is a credible,
     current hook few reviewers foreground. [S28]
 14. **Honest weaknesses are structural, not cosmetic:** solo-maintainer OSS; a
     runtime dependency chain on **pi** (single-maintainer OSS, ~46k stars) +
@@ -237,7 +237,7 @@
 - **Claude Code plugins & marketplaces** — since **2025-10-09**; a plugin bundles
   skills, subagents (`agents/`), slash commands, hooks, MCP; distributed via git-repo
   marketplaces (official + community). The native channel for the Claude Code form of
-  adversarial-review. [S51]
+  blind-peer-review. [S51]
 - **OpenAI Codex CLI** — Apache-2.0 (~100k+ stars); built-in **`/review`**, config via
   `AGENTS.md` + profiles, custom `model_providers`, and `codex-action` for CI. [S52]
 - **Cursor rules + AGENTS.md** — `.cursor/rules/*.mdc` + native `AGENTS.md` support.
@@ -258,7 +258,7 @@ Dimensions: **Delivery** · **Model portability** · **Multi-agent** · **Gate**
 
 | Tool | Category | Delivery | Model portability | Multi-agent | Gate | Custom rules / learning | Self-host | OSS | Pricing | Traction / funding |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **adversarial-review** | OSS gate | GitHub **Action** + CC plugin + local CLI | **BYO-any (OpenRouter)** | **Yes — 8 fresh-context lenses, 1/CI job** | **Blocking (fail-closed)** | Static per-repo overrides; **no learning loop** | **Yes (fully)** | **Apache-2.0** | Free (you pay tokens) | Solo OSS, pre-traction |
+| **blind-peer-review** | OSS gate | GitHub **Action** + CC plugin + local CLI | **BYO-any (OpenRouter)** | **Yes — 8 fresh-context lenses, 1/CI job** | **Blocking (fail-closed)** | Static per-repo overrides; **no learning loop** | **Yes (fully)** | **Apache-2.0** | Free (you pay tokens) | Solo OSS, pre-traction |
 | CodeRabbit | SaaS | App (GH/GL/ADO/BB) + IDE + CLI | Vendor-managed; BYO on Ent. | Yes | **Blocking** (Pre-Merge Checks) | `.coderabbit.yaml`, AST rules, **Learnings** | Enterprise | No | Pro $24 / Plus $48 /user-mo | **$143M @ ~$1.5B (Aug 2026)** |
 | Greptile | SaaS | App (GH/GL) + API + MCP | Vendor; BYO on Ent./self-host | Yes (v3) | Advisory → check | Custom rules + Learning | Enterprise VPC | No | $30/seat-mo (credits) | $25M Series A (2025) |
 | Graphite (Agent) | SaaS | **GitHub-only** App + CLI | Vendor (Claude/OpenAI) | No | Advisory | Plain-lang rules; learns | **No** | No | Team $40/user-mo | $52M Series B (2025) |
@@ -302,7 +302,7 @@ Dimensions: **Delivery** · **Model portability** · **Multi-agent** · **Gate**
    pivoted, or starved. Two of the six "classic" reviewers already **pivoted**
    (Ellipsis → agent platform; Sweep → IDE). Betting on a *paid* head-to-head with
    this field is unwise for a solo OSS project. [S3][S37][S35][S36]
-3. **Where the SaaS incumbents are genuinely weak (adversarial-review's openings):**
+3. **Where the SaaS incumbents are genuinely weak (blind-peer-review's openings):**
    - **Single-model / vendor lock-in.** BYO-any-model is nearly absent outside OSS
      PR-Agent; most BYO-key is enterprise-gated. A PHI/regulated shop that must route
      to a specific compliant endpoint (Bedrock, a private model) is poorly served. [S13][S14]
@@ -312,7 +312,7 @@ Dimensions: **Delivery** · **Model portability** · **Multi-agent** · **Gate**
      also where the incumbents are strong — a double-edged trend (see §5 weaknesses).
    - **Prompt-injection posture is largely undocumented.** The reviewer is itself an
      LLM app ingesting untrusted PR content (the "lethal trifecta"); almost no vendor
-     publishes a threat model. adversarial-review does. [S29]
+     publishes a threat model. blind-peer-review does. [S29]
 4. **The AI-generated-code explosion is reshaping the buyer's problem.** Vendors now
    pitch "governing AI-written code" (CodeRabbit's change-management framing; Sonar's
    **AI Code Assurance** gate for AI-generated code; Qodo's "verification"). The
@@ -333,7 +333,7 @@ Dimensions: **Delivery** · **Model portability** · **Multi-agent** · **Gate**
 
 ---
 
-## 5. Where adversarial-review fits — honest differentiation
+## 5. Where blind-peer-review fits — honest differentiation
 
 ### 5.1 The defensible wedge (what is actually rare)
 
@@ -344,7 +344,7 @@ in the field. It is the *specific intersection*, which no competitor occupies:
   SaaS gates (CodeRabbit, Qodo, CodeAnt, Codacy, Sonar) are proprietary and
   vendor-model. OSS analogs with a gate (`adverse`) are tiny and 3-lens with no
   injection defense. OSS reviewers that are portable (`open-code-review`,
-  `wshobson/agents`) **have no fail-closed gate**. adversarial-review is the only one
+  `wshobson/agents`) **have no fail-closed gate**. blind-peer-review is the only one
   combining all four. [S1][S14][S23][S24][S26]
 - **A documented, injection-hardened trust boundary as a design centerpiece**, not an
   afterthought: a strict **three-tool allowlist** (`get_pr_diff`,
@@ -382,12 +382,12 @@ in the field. It is the *specific intersection*, which no competitor occupies:
   regression or abandonment in any breaks the CI gate. Incumbents own their stack. [S30][S31]
 - **No learning loop, dashboard, or analytics.** CodeRabbit "Learnings," Greptile
   Learning, Qodo Rule Miner, Entelligence Learnings all improve from feedback and
-  give managers dashboards. adversarial-review's tuning is **static per-repo override
+  give managers dashboards. blind-peer-review's tuning is **static per-repo override
   files** — deliberately, for injection safety, but it means it does not get smarter
   and has no reporting surface. [S1][S13][S10]
 - **Self-host + privacy is not a differentiator on its own.** CodeRabbit, Qodo,
   CodeAnt (HIPAA + BAA), Snyk (Local Analysis), Sonar Server all self-host with SOC 2
-  / no-train. adversarial-review must lead with *enforcement + hardening + OSS/BYO*,
+  / no-train. blind-peer-review must lead with *enforcement + hardening + OSS/BYO*,
   not "we're private." [S1][S15][S16]
 - **Per-PR token cost is real and visible.** 5-8 parallel lenses × provider tokens on
   every PR; incumbents amortize into a per-seat price and optimize aggressively
@@ -425,7 +425,7 @@ competitive gap (§4).
   is on). Distribution is the binding constraint; the plugin rail exists and is free.
   *→ gap: cold-start distribution.* [S51]
 - **Resolve the name collision.** Decide: coexist with a strong scoped identity
-  (`jamescrowley321/adversarial-review`, a distinct tagline) or rename the OSS brand.
+  (`jamescrowley321/blind-peer-review`, a distinct tagline) or rename the OSS brand.
   A same-named competitor is a self-inflicted wound. *→ weakness 5.2.* [S25]
 - **Make the security story the headline**, not a footnote: a one-page "why a
   *hardened* reviewer" pitch built on the injection threat model + **OWASP LLM 2026**
@@ -459,7 +459,7 @@ competitive gap (§4).
   artifact per PR, or a GitHub Check summary) — *not* a hosted dashboard, but enough
   reporting to answer "what did the gate catch this month" without a SaaS backend. *→
   weakness 5.2.*
-- **A PHI/regulated reference profile** (Sentinel tuned for PHI/PII/tenant isolation +
+- **A PHI/regulated reference profile** (Security Review tuned for PHI/PII/tenant isolation +
   Compliance for AI provenance + a Bedrock/private-model routing recipe) — a concrete,
   documented config for the origin use case that also serves any regulated buyer. *→
   diff 5.1; gap §4.3.*
@@ -532,7 +532,7 @@ single or non-primary source.
 26. [S26] wshobson/agents (multi-harness marketplace, ~38.8k stars): https://github.com/wshobson/agents
 27. [S27] Cursor rules + AGENTS.md standard: https://cursor.com/docs/rules ; https://agents.md
 28. [S28] OWASP Top 10 for LLM Applications 2026 (published 2026-08-04; LLM01 #1): https://genai.owasp.org/llm-top-10/ ; https://cybersecuritynews.com/owasp-genai-llm-top-10-2026/
-29. [S29] adversarial-review security-hardening doc (this repo): `docs/security-hardening.md` ; Simon Willison, "The lethal trifecta" (2025): https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/
+29. [S29] blind-peer-review security-hardening doc (this repo): `docs/security-hardening.md` ; Simon Willison, "The lethal trifecta" (2025): https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/
 30. [S30] pi coding agent (MIT, Mario Zechner): https://pi.dev/ ; https://github.com/badlogic/pi-mono
 31. [S31] shaftoe/pi-coding-agent-action (CI runtime for pi): https://github.com/shaftoe/pi-coding-agent-action
 32. [S32] Greptile $25M Series A (Benchmark, 2025): https://www.thesaasnews.com/news/greptile-raises-25-million-series-a ; https://sacra.com/c/greptile
@@ -564,5 +564,5 @@ single or non-primary source.
 > acquired; Ellipsis and Sweep pivoted away from PR review). Re-verify any load-bearing
 > figure before external use. Startup pricing for Entelligence, Panto, and Matter AI is
 > JS-rendered or points at sibling products and is marked (unverified). pi's star count
-> (~46k) is approximate. adversarial-review's own capabilities are cited to this repo's
+> (~46k) is approximate. blind-peer-review's own capabilities are cited to this repo's
 > `README.md`, `docs/security-hardening.md`, and `lenses/`.

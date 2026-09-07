@@ -1,4 +1,4 @@
-# Base agents — the adversarial-review lens library
+# Base agents — the blind-peer-review lens library
 
 This directory is the **single, harness-neutral source of truth** for the
 adversarial review personas ("lenses"). Every consumer — the GitHub Action (pi in
@@ -27,12 +27,12 @@ registry — a non-lens file sitting in it gets enumerated as a lens.
 
 | Key | Name | Activation | Default |
 |-----|------|-----------|---------|
-| `blind` | Blind Hunter | always | on |
-| `edge-case` | Edge Case Hunter | always | on |
-| `acceptance` | Acceptance Auditor | always | on |
-| `sentinel` | Sentinel | always | on |
-| `viper` | Viper | security surface (self-skips) | on |
-| `compliance` | Compliance | always | off (opt-in) |
+| `cold-read` | Cold Read | always | on |
+| `edge-case` | Edge Cases | always | on |
+| `acceptance` | Acceptance Criteria | always | on |
+| `security` | Security Review | always | on |
+| `red-team` | Red Team | security surface (self-skips) | on |
+| `policy` | Compliance | always | off (opt-in) |
 | `owasp-web` | OWASP Web Top 10 | always | off (opt-in) |
 | `owasp-llm` | OWASP LLM Top 10 | LLM surface (self-skips) | off (opt-in) |
 
@@ -43,11 +43,11 @@ generated at runtime from untrusted input. The convention is one override
 directory, honored by every adapter:
 
 ```
-<consumer-repo>/.adversarial-review/lenses/<key>.md
+<consumer-repo>/.blind-peer-review/lenses/<key>.md
 ```
 
 - **Override** — a file at that path *replaces* the base persona of the same
-  `key` (e.g. a repo ships a PHI/PII-tuned `sentinel.md`, or a
+  `key` (e.g. a repo ships a PHI/PII-tuned `security.md`, or a
   domain-specific `owasp-web.md`).
 - **Append** — add a `<new-key>.md` there plus a `manifest.json` entry to run an
   extra lens the base set doesn't ship.

@@ -1,11 +1,22 @@
 {
-  "name": "adversarial-review",
-  "displayName": "Adversarial Review",
-  "version": "1.3.0",
-  "description": "Fresh-context, diff-only multi-lens adversarial code review — skeptical AI reviewers that hunt bugs, security holes, and unmet acceptance criteria in your working diff. Shares one persona library with the CI Action, Codex, Cursor, and pi.",
-  "author": { "name": "James Crowley" },
-  "homepage": "https://github.com/jamescrowley321/adversarial-review",
-  "repository": "https://github.com/jamescrowley321/adversarial-review",
+  "name": "blind-peer-review",
+  "displayName": "Blind Peer Review",
+  "version": "1.8.0",
+  "description": "Blind peer review for your working diff: independent, context-starved referees (Cold Read, Edge Cases, Acceptance Criteria, Security Review, Red Team, plus opt-in Policy & Provenance and OWASP) that each report separately and any of which can block. One lens library shared with the CI Action, Codex, Cursor and pi.",
+  "author": {
+    "name": "James Crowley"
+  },
+  "homepage": "https://github.com/jamescrowley321/blind-peer-review",
+  "repository": "https://github.com/jamescrowley321/blind-peer-review",
   "license": "Apache-2.0",
-  "keywords": ["code-review", "adversarial", "security", "owasp", "prompt-injection", "pi", "claude-code"]
+  "keywords": [
+    "code-review",
+    "peer-review",
+    "adversarial",
+    "security",
+    "owasp",
+    "prompt-injection",
+    "pi",
+    "claude-code"
+  ]
 }

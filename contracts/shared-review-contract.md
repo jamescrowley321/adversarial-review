@@ -1,6 +1,6 @@
 # Shared review contract (harness-neutral)
 
-This contract applies to every adversarial-review lens on every harness. Your
+This contract applies to every blind-peer-review lens on every harness. Your
 harness adapter tells you HOW to fetch the diff and WHERE to emit findings; this
 file states the rules that never change. (The pi/CI path uses
 `shared-instructions.md`, which layers the GitHub-tool I/O on top of these same
@@ -54,7 +54,7 @@ the shape is identical either way:
 }
 ```
 
-- `lens` — the exact lens name your persona gives you (e.g. "Edge Case Hunter").
+- `lens` — the exact lens name your persona gives you (e.g. "Edge Cases").
 - `summary` — one short line. NOT the findings.
 - `findings` — an array. Use `[]` when you found nothing; that is a normal result,
   not a failure. Do NOT omit the field and do NOT use `null`.

@@ -1,4 +1,4 @@
-# Contributing to Adversarial Review
+# Contributing to Blind Peer Review
 
 Thanks for your interest in contributing. This repo is a **composite GitHub
 Action** — mostly `action.yml`, the persona prompts in `lenses/`, and a bit of
@@ -17,7 +17,7 @@ together.
 | `lenses/*.md` | The six review personas + the shared output contract |
 | `scripts/run-local.mjs` | Local pre-CI runner (Node) |
 | `examples/caller-workflow.yml` | Drop-in consumer workflow |
-| `.github/adversarial-review/compliance.md` | This repo's own Compliance-lens rules |
+| `.github/blind-peer-review/compliance.md` | This repo's own Compliance-lens rules |
 | `.github/workflows/` | Self-review dogfood, lint, and release automation |
 | `release-please-config.json`, `.release-please-manifest.json`, `version.txt` | release-please config + tracked version (see [Cutting a release](#cutting-a-release)) |
 
@@ -107,7 +107,7 @@ all contributions regardless of how they were authored.
 
 ### Requirements for AI-assisted PRs
 
-- **All CI checks must pass** — lint, the adversarial-review gate, everything. No exceptions.
+- **All CI checks must pass** — lint, the blind-peer-review gate, everything. No exceptions.
 - **Audit disclosure is required.** Every AI-assisted PR must record, in the PR
   description's **AI provenance** block, the **harness/agent(s)** and the
   **model(s)** used to produce the change (e.g. harness `Claude Code`, model

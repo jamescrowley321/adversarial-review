@@ -1,4 +1,4 @@
-# Dogfood: Adversarial Review reviews its own pull requests using the action in
+# Dogfood: Blind Peer Review reviews its own pull requests using the action in
 # this repo (uses: ./). Toggle lenses in the `config` job's ENABLED list.
 # owasp-llm is enabled here on purpose — this action is itself an LLM app.
 
@@ -73,19 +73,19 @@ jobs:
         shell: node {0}
         env:
           ENABLED: |
-            blind
+            cold-read
             edge-case
             acceptance
-            sentinel
-            viper
-            compliance
+            security
+            red-team
+            policy
             owasp-web
             owasp-llm
         run: |
           const NAMES = {
-            blind: "Blind Hunter", "edge-case": "Edge Case Hunter",
-            acceptance: "Acceptance Auditor", sentinel: "Sentinel", viper: "Viper",
-            compliance: "Compliance Auditor", "owasp-web": "OWASP Web Top 10",
+            "cold-read": "Cold Read", "edge-case": "Edge Cases",
+            acceptance: "Acceptance Criteria", security: "Security Review", "red-team": "Red Team",
+            policy: "Policy & Provenance", "owasp-web": "OWASP Web Top 10",
             "owasp-llm": "OWASP LLM Top 10",
           };
           const keys = (process.env.ENABLED || "").split("\n")
@@ -150,7 +150,7 @@ jobs:
           # blocks anything as perfect.
           #
           # Reviewing them produces guaranteed false positives on every push:
-          # Blind Hunter and the Compliance Auditor have each blocked on the
+          # Cold Read and the Policy & Provenance have each blocked on the
           # planted credential and the removed guard, and on #29 the OWASP LLM
           # lens reported a fixture's `src/api/reports.ts` as a real deleted
           # authorization check. A 2431-line fixture there also truncated the

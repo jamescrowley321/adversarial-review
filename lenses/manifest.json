@@ -1,45 +1,45 @@
 {
   "manifest_version": 1,
   "shared_instructions": "shared-instructions.md",
-  "consumer_override_dir": ".adversarial-review/lenses",
+  "consumer_override_dir": ".blind-peer-review/lenses",
   "lenses": [
     {
-      "key": "blind",
-      "name": "Blind Hunter",
+      "key": "cold-read",
+      "name": "Cold Read",
       "activation": "always",
       "default_enabled": true,
       "summary": "Zero-context logic bugs, off-by-one, unhandled errors, footguns."
     },
     {
       "key": "edge-case",
-      "name": "Edge Case Hunter",
+      "name": "Edge Cases",
       "activation": "always",
       "default_enabled": true,
       "summary": "Unhandled branches, boundaries, and async gaps."
     },
     {
       "key": "acceptance",
-      "name": "Acceptance Auditor",
+      "name": "Acceptance Criteria",
       "activation": "always",
       "default_enabled": true,
       "summary": "Verifies the PR's stated acceptance criteria are met and tested."
     },
     {
-      "key": "sentinel",
-      "name": "Sentinel",
+      "key": "security",
+      "name": "Security Review",
       "activation": "always",
       "default_enabled": true,
       "summary": "Exploitable auth / PHI / PII / tenant-isolation vulnerabilities."
     },
     {
-      "key": "viper",
-      "name": "Viper",
+      "key": "red-team",
+      "name": "Red Team",
       "activation": "security-surface",
       "default_enabled": true,
       "summary": "Red-team attack paths; self-skips when no auth/middleware/infra surface."
     },
     {
-      "key": "compliance",
+      "key": "policy",
       "name": "Compliance",
       "activation": "always",
       "default_enabled": false,

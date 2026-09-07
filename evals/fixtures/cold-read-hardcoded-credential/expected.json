@@ -1,0 +1,10 @@
+{
+  "class": "must-block",
+  "smoke": false,
+  "pr_title": "feat(mailer): send order receipts",
+  "guards": "Counterweight: a live-looking API key committed in the diff. Visible in an added line, so Grounding makes it blockable at full severity.",
+  "lenses": {
+    "cold-read": { "block": true, "location_matches": "^src/integrations/mailer\\.js:" },
+    "security": { "block": true, "location_matches": "^src/integrations/mailer\\.js:" }
+  }
+}

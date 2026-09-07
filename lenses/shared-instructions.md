@@ -148,7 +148,7 @@ The shape — the arguments of the call, and the object on the fallback path:
 
 Rules:
 
-- `lens` — the exact lens name given in your persona (e.g. "Edge Case Hunter").
+- `lens` — the exact lens name given in your persona (e.g. "Edge Cases").
 - `summary` — one short line. NOT the findings.
 - `findings` — an array. Use `"findings": []` (empty array) if there are no
   findings — do NOT omit the field, do NOT use `null`.
@@ -160,7 +160,7 @@ Rules:
     appears in the diff; an invented path can't be anchored as an inline
     comment.
   - `detail` — what's wrong, concretely. Include a concrete failure/attack
-    scenario where the persona calls for one (Sentinel, Viper).
+    scenario where the persona calls for one (Security Review, Red Team).
   - `recommendation` — the fix.
 
 On the `submit_findings` path these are the call's arguments — the tool checks

@@ -29,10 +29,10 @@ Three conflicts, all the same shape — the branch predating `main`'s newer cont
 |---|---|---|
 | `action.yml` | took `main` wholesale | The branch's only change here was removing the `compliance_rules_file` input. That injection fix **already landed on `main`** by another route, so the branch had nothing left to contribute. |
 | `CHANGELOG.md` | took `main` wholesale | release-please owns this file now. Hand-editing already-released sections rewrites history; the entry will be generated from the conventional commit instead. |
-| `README.md` | hunk 1 → `main`, hunk 2 → branch | Hunk 1 was `main`'s newer inputs table (`dismiss_superseded`, `cleanup_agent_comments`). Hunk 2 was the branch's genuinely new sentence about the local `.adversarial-review/lenses/` override. |
+| `README.md` | hunk 1 → `main`, hunk 2 → branch | Hunk 1 was `main`'s newer inputs table (`dismiss_superseded`, `cleanup_agent_comments`). Hunk 2 was the branch's genuinely new sentence about the local `.blind-peer-review/lenses/` override. |
 
 `scripts/run-local.mjs`, `.gitignore`, `lenses/compliance.md`, `docs/security-hardening.md` and
-`.github/adversarial-review/compliance.md` auto-merged.
+`.github/blind-peer-review/compliance.md` auto-merged.
 
 The old branch pointer is untouched at `9e1be80` until you're happy with the replay.
 
@@ -41,9 +41,9 @@ The old branch pointer is untouched at `9e1be80` until you're happy with the rep
 ```
 .claude-plugin/plugin.json          .claude-plugin/marketplace.json
 skills/review/SKILL.md              agents/{acceptance,blind,compliance,edge-case,
-lenses/manifest.json                        owasp-llm,owasp-web,sentinel,viper}.md
+lenses/manifest.json                        owasp-llm,owasp-web,security,red-team}.md
 lenses/shared-review-contract.md    adapters/{README.md,codex/AGENTS.md,
-lenses/README.md                             cursor/adversarial-review.mdc}
+lenses/README.md                             cursor/blind-peer-review.mdc}
 docs/market-analysis-and-roadmap.md
 ```
 
@@ -110,7 +110,7 @@ flip on phrasing. CI does not have this problem: it parses a JSON `severity` fie
 when both paths emitted markdown. The trust-boundary and severity halves of the two files agree;
 only the envelope diverges.
 
-**Live evidence, 2026-09-07:** `healthcloud-console-web` #85 had its Viper lens return invalid
+**Live evidence, 2026-09-07:** `healthcloud-console-web` #85 had its Red Team lens return invalid
 JSON and block the Merge Gate, while the same lens passed on `healthcheck-hl7-pdex` #15 in the same
 sweep. Malformed lens output is still occurring on the CI path — the failure class PR #39 was
 closed against. Worth a measurement before deciding whether that closure still holds.
@@ -203,7 +203,7 @@ merge gates depend on that file. Only the second waits for W3.
 3. **DONE (found while doing the above) — `run-local.mjs` had no trust boundary at all.** The pi
    local path built its own inline markdown envelope and never loaded any shared contract, so a
    local run had no injection defence. It now injects `contracts/shared-review-contract.md`, writes
-   `.adversarial-review/out/<key>.json`, and exits non-zero on a BLOCK.
+   `.blind-peer-review/out/<key>.json`, and exits non-zero on a BLOCK.
 4. **Extend the eval harness to the local path (§4.3).** Reuse the existing fixtures against the
    local adjudicator. Minimum bar: a fixture whose lens output contains the literal words "no MUST
    FIX findings" must **PASS**, and that test must fail against today's SKILL.md.
@@ -223,8 +223,8 @@ own persona, and CI behaviour is unchanged (the existing 147 tests are the regre
 2. Wire release-please `extra-files` so `plugin.json` and `marketplace.json` track `version.txt` (§4.5).
 3. Add a lint step: manifests parse, versions match `version.txt`, and every lens in
    `manifest.json` has both `lenses/<key>.md` and `agents/<key>.md`.
-4. Install it from a scratch repo via `/plugin marketplace add jamescrowley321/adversarial-review`
-   and run `/adversarial-review:review` against a fixture diff end-to-end.
+4. Install it from a scratch repo via `/plugin marketplace add jamescrowley321/blind-peer-review`
+   and run `/blind-peer-review:check` against a fixture diff end-to-end.
 5. Decide the name-collision question the market analysis raised (§6 of that doc) **before**
    the marketplace entry is public — a same-named competitor is easier to fix now than after
    anyone installs it.
@@ -244,7 +244,7 @@ after W0–W2, on the strength of the eval suite.
 ### W4 — Codex / Cursor *(cheap until demand appears)*
 
 pi is already served by `run-local.mjs`. For the other two, pick one distribution mechanism
-(§4.6) — an `npx adversarial-review init` that vendors `lenses/` and writes the adapter file is
+(§4.6) — an `npx blind-peer-review init` that vendors `lenses/` and writes the adapter file is
 the only option that also serves people not on Claude Code. Verify current Codex `AGENTS.md` and
 Cursor `.cursor/rules/*.mdc` conventions before writing either.
 
@@ -272,7 +272,7 @@ Hold this behind evidence that anyone wants it. Per §3 it is not the moat.
 
 | | |
 |---|---|
-| Worktree | `/home/james/repos/adversarial-review--plugin` |
+| Worktree | `/home/james/repos/blind-peer-review--plugin` |
 | Branch | `feat/multi-harness-lenses` — 2 ahead of `origin/main`, **not pushed** |
 | Old branch | `feat/claude-code-plugin` @ `9e1be80` — preserved, delete once the replay is accepted |
 | Tests | 144/149 — 5 failures, cause known (§2), fix not applied |

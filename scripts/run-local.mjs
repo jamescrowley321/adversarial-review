@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Adversarial Review — local mode (Node, no shell).
+// Blind Peer Review — local mode (Node, no shell).
 //
 // Runs the review personas against your working branch BEFORE you push, using
 // the pi CLI. Each lens reads the branch diff and writes its findings to
-// .adversarial-review/out/<lens>.json. A repo can override any persona by committing
-// .adversarial-review/lenses/<lens>.md (trusted local tuning). Language-agnostic.
+// .blind-peer-review/out/<lens>.json. A repo can override any persona by committing
+// .blind-peer-review/lenses/<lens>.md (trusted local tuning). Language-agnostic.
 //
 // Usage:
 //   node scripts/run-local.mjs                     # adversarial lenses vs origin/main
 //   node scripts/run-local.mjs --base main
-//   node scripts/run-local.mjs --lens sentinel,viper
+//   node scripts/run-local.mjs --lens security,red-team
 //   PI_BIN=pi MODEL=z-ai/glm-5.2 node scripts/run-local.mjs
 //
 // Requires: git, the `pi` CLI on PATH, and a provider key in OPENROUTER_API_KEY.
@@ -23,8 +23,8 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LENS_DIR = join(ROOT, "lenses");
 const CONTRACT = join(ROOT, "contracts", "shared-review-contract.md");
-const OUT = ".adversarial-review/out";              // ephemeral: diff + per-lens findings
-const OVERRIDE_DIR = ".adversarial-review/lenses";  // committed: per-repo persona overrides
+const OUT = ".blind-peer-review/out";              // ephemeral: diff + per-lens findings
+const OVERRIDE_DIR = ".blind-peer-review/lenses";  // committed: per-repo persona overrides
 
 // The lens registry is the shared, harness-neutral manifest — one source of truth.
 // (Local mode reviews code; Compliance is a PR-time policy check, so it is not in
@@ -38,7 +38,7 @@ function printHelp() {
 }
 
 let base = "origin/main";
-let lenses = ["blind", "edge-case", "acceptance", "sentinel", "viper"];
+let lenses = ["cold-read", "edge-case", "acceptance", "security", "red-team"];
 let PI_BIN = process.env.PI_BIN || "pi";
 let PROVIDER = process.env.PROVIDER || "openrouter";
 let MODEL = process.env.MODEL || "z-ai/glm-5.2";

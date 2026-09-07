@@ -1,6 +1,6 @@
-# Adversarial Review: local-mode output is ephemeral, but persona overrides in
-# .adversarial-review/lenses/ are committed — so ignore only the output dir.
-.adversarial-review/out/
+# Blind Peer Review: local-mode output is ephemeral, but persona overrides in
+# .blind-peer-review/lenses/ are committed — so ignore only the output dir.
+.blind-peer-review/out/
 review-diff.patch
 
 # Editors / OS

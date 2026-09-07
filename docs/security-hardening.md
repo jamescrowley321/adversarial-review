@@ -1,6 +1,6 @@
 # Security hardening & OWASP roadmap
 
-Adversarial Review is itself an LLM application: it runs an AI agent (pi) over
+Blind Peer Review is itself an LLM application: it runs an AI agent (pi) over
 **untrusted pull-request content** with access to a provider API key and a
 `GITHUB_TOKEN` that can post reviews. So the OWASP **Top 10 for LLM Applications
 2026** applies to *this action*, not just to the code it reviews — above all
@@ -89,7 +89,7 @@ approve). On top of that:
 ## OWASP integration roadmap
 
 The security lenses already cover much of the **OWASP Web Top 10 (2021)** —
-Sentinel and Viper hit injection, broken access control, SSRF, crypto misuse.
+Security Review and Red Team hit injection, broken access control, SSRF, crypto misuse.
 The plan makes that explicit and adds LLM coverage:
 
 - ✅ **Phase 1 — `owasp-web` lens** (opt-in): the OWASP Web Top 10 (2021), each
@@ -98,7 +98,7 @@ The plan makes that explicit and adds LLM coverage:
   (LLM01–LLM10), tagged `LLM0x`, activating only when the diff touches AI/LLM
   surface. Notes when the OWASP **Agentic (ASI) Top 10** also applies.
 - 🔭 **Phase 3 — per-repo OWASP tuning** via a committed
-  `.adversarial-review/lenses/owasp-web.md` (or `owasp-llm.md`) override that the
+  `.blind-peer-review/lenses/owasp-web.md` (or `owasp-llm.md`) override that the
   local harnesses read, so a repo can tighten the checklist to its domain. CI keeps
   running the pinned base packs (injection-safe — no rule text from the PR checkout).
 - ✅ **Reflexive check:** the self-review workflow runs `owasp-llm` on *this* repo

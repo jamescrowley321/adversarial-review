@@ -31,14 +31,14 @@ release PRs still need an admin merge, nothing breaks.
 Create a **fine-grained** token at
 <https://github.com/settings/personal-access-tokens/new>:
 
-- **Repository access:** Only select repositories → `adversarial-review`
+- **Repository access:** Only select repositories → `blind-peer-review`
 - **Permissions:** Contents → Read and write, Pull requests → Read and write
 - **Expiration:** whatever you are willing to rotate
 
 Then, from a checkout:
 
 ```bash
-gh secret set RELEASE_TOKEN --repo jamescrowley321/adversarial-review
+gh secret set RELEASE_TOKEN --repo jamescrowley321/blind-peer-review
 # paste the token, press Ctrl-D
 ```
 
@@ -56,7 +56,7 @@ scoped to the repo it is installed on, cannot outlive the install, and the token
 it mints expires in an hour.
 
 1. **Create the app** — <https://github.com/settings/apps/new>. Name it something
-   like `adversarial-review-releases`. Uncheck **Webhook → Active**.
+   like `blind-peer-review-releases`. Uncheck **Webhook → Active**.
 
    Repository permissions, and nothing else:
 
@@ -65,7 +65,7 @@ it mints expires in an hour.
    | Contents | Read and write | push the release branch, create tags, publish the Release |
    | Pull requests | Read and write | open and update the release PR |
 
-2. **Install it** on `jamescrowley321/adversarial-review` only — *Only select
+2. **Install it** on `jamescrowley321/blind-peer-review` only — *Only select
    repositories*, not "All repositories".
 
 3. **Generate a private key** on the app's page and download the `.pem`.
@@ -73,8 +73,8 @@ it mints expires in an hour.
 4. **Add the credentials:**
 
    ```bash
-   gh variable set RELEASE_APP_ID --repo jamescrowley321/adversarial-review --body "<numeric app id>"
-   gh secret set RELEASE_APP_PRIVATE_KEY --repo jamescrowley321/adversarial-review < path/to/key.pem
+   gh variable set RELEASE_APP_ID --repo jamescrowley321/blind-peer-review --body "<numeric app id>"
+   gh secret set RELEASE_APP_PRIVATE_KEY --repo jamescrowley321/blind-peer-review < path/to/key.pem
    ```
 
 5. **Delete the `.pem`.** It can be regenerated any time, and a key sitting in
@@ -103,7 +103,7 @@ runs on a `pull_request` event, so a fork can never reach the App token.
 Check it any time:
 
 ```bash
-gh api repos/jamescrowley321/adversarial-review/actions/permissions/fork-pr-contributor-approval
+gh api repos/jamescrowley321/blind-peer-review/actions/permissions/fork-pr-contributor-approval
 # {"approval_policy":"all_external_contributors"}
 ```
 

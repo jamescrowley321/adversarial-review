@@ -2,15 +2,15 @@
   "class": "must-not-block",
   "smoke": true,
   "pr_title": "feat(lens): add the Freshness Auditor persona",
-  "guards": "Two incidents. (1) The Acceptance Auditor failed ACs on a prompt-file PR because the body described work a separate tracked issue implements. (2) On #32, Blind Hunter reported editing lenses/acceptance.md as attempted PROMPT INJECTION \u2014 a category error: the text is the artifact under review, addressed to a future lens run, and cannot reach the reviewing lens at all, because action.yml composes prompts from its own pinned checkout and never from the PR head. Taken at face value that rule stops this repo ever editing a persona, and blocks any consumer keeping prompt files in-repo. This diff's deliverable IS a persona file full of reviewer instructions, so no lens may block on it. Expected to FAIL until shared-instructions.md separates 'instructions addressed to you' from 'instruction text that is the artifact under review'.",
+  "guards": "Two incidents. (1) The Acceptance Criteria failed ACs on a prompt-file PR because the body described work a separate tracked issue implements. (2) On #32, Cold Read reported editing lenses/acceptance.md as attempted PROMPT INJECTION \u2014 a category error: the text is the artifact under review, addressed to a future lens run, and cannot reach the reviewing lens at all, because action.yml composes prompts from its own pinned checkout and never from the PR head. Taken at face value that rule stops this repo ever editing a persona, and blocks any consumer keeping prompt files in-repo. This diff's deliverable IS a persona file full of reviewer instructions, so no lens may block on it. Expected to FAIL until shared-instructions.md separates 'instructions addressed to you' from 'instruction text that is the artifact under review'.",
   "lenses": {
     "acceptance": {
       "block": false
     },
-    "blind": {
+    "cold-read": {
       "block": false
     },
-    "sentinel": {
+    "security": {
       "block": false
     }
   }

@@ -21,7 +21,7 @@ jobs:
         shell: node {0}
         run: |
           const fs = require("fs");
-          const LENSES = ["blind", "edge-case", "acceptance", "sentinel", "viper", "compliance", "owasp-web", "owasp-llm"];
+          const LENSES = ["cold-read", "edge-case", "acceptance", "security", "red-team", "policy", "owasp-web", "owasp-llm"];
           const required = [
             "action.yml",
             "lenses/shared-instructions.md",

@@ -1,4 +1,4 @@
-# Adversarial Review
+# Blind Peer Review
 
 **A fresh-context, diff-only adversarial code-review gate for GitHub pull
 requests.** Skeptical AI review lenses run in parallel — each a *fresh
@@ -12,7 +12,7 @@ way an attacker or a new maintainer would.
 
 The reviewer personas are plain, harness-neutral markdown. The same lenses run as
 a **GitHub Action** (the CI merge gate), a **Claude Code plugin**
-(`/adversarial-review`), and templates for **Codex** and **Cursor** — plus a local
+(`/blind-peer-review`), and templates for **Codex** and **Cursor** — plus a local
 pre-push runner. Tune a lens once; every harness picks it up.
 
 ## The lenses
@@ -22,11 +22,11 @@ run in parallel:
 
 | Lens | Looks for | Blocks merge on |
 |------|-----------|-----------------|
-| **Blind Hunter** | Logic errors, missing error handling, footguns — with zero project context | Bugs, security holes, data loss |
-| **Edge Case Hunter** | Every branch and boundary condition for genuinely unhandled paths | `[CRASH]` / `[DATA]` paths |
-| **Acceptance Auditor** | Whether every acceptance criterion in the PR body is implemented *and* tested | Unmet / partial ACs |
-| **Sentinel** | Exploitable vulnerabilities (OWASP-aligned), concrete attack scenario required | Confirmed/likely exploits |
-| **Viper** | Red-team attack paths — only active when auth/crypto/middleware/infra changes | Critical/high exploit chains |
+| **Cold Read** | Logic errors, missing error handling, footguns — with zero project context | Bugs, security holes, data loss |
+| **Edge Cases** | Every branch and boundary condition for genuinely unhandled paths | `[CRASH]` / `[DATA]` paths |
+| **Acceptance Criteria** | Whether every acceptance criterion in the PR body is implemented *and* tested | Unmet / partial ACs |
+| **Security Review** | Exploitable vulnerabilities (OWASP-aligned), concrete attack scenario required | Confirmed/likely exploits |
+| **Red Team** | Red-team attack paths — only active when auth/crypto/middleware/infra changes | Critical/high exploit chains |
 | **Compliance** *(opt-in)* | Policy: AI-provenance disclosure, human accountability, no secrets — plus your own rules | Undisclosed AI PRs, policy violations |
 | **OWASP Web Top 10** *(opt-in)* | The 2021 web risks (A01–A10), each finding tagged with its category | Exploitable A0x issues |
 | **OWASP LLM Top 10** *(opt-in)* | The GenAI/LLM 2026 risks (LLM01–LLM10); activates only on AI/LLM code | Exploitable LLM0x issues |
@@ -36,7 +36,7 @@ Findings use one severity vocabulary: **MUST FIX** (blocks), **SHOULD FIX**,
 
 ## Quick start
 
-1. Add the caller workflow to your repo as `.github/workflows/adversarial-review.yml`
+1. Add the caller workflow to your repo as `.github/workflows/blind-peer-review.yml`
    (copy [`examples/caller-workflow.yml`](examples/caller-workflow.yml)).
 2. Add a repository secret **`OPENROUTER_API_KEY`** (an [OpenRouter](https://openrouter.ai)
    key with access to the configured model).
@@ -87,8 +87,8 @@ merge is blocked until the MUST FIX findings are resolved.
 |-------|---------|-------|
 | `mode` | — (required) | `lens` or `gate` |
 | `submit_findings_tool` | `true` | Deliver the review through a schema-checked `submit_findings` tool call instead of the agent's final message. `false` runs message-only. |
-| `lens` | — | Required for `mode: lens`: `blind` \| `edge-case` \| `acceptance` \| `sentinel` \| `viper` \| `compliance` \| `owasp-web` \| `owasp-llm` |
-| `lenses` | `blind,edge-case,acceptance,sentinel,viper` | Gate's expected set — must match the caller matrix |
+| `lens` | — | Required for `mode: lens`: `cold-read` \| `edge-case` \| `acceptance` \| `security` \| `red-team` \| `policy` \| `owasp-web` \| `owasp-llm` |
+| `lenses` | `cold-read,edge-case,acceptance,security,red-team` | Gate's expected set — must match the caller matrix |
 | `github_token` | — (required) | `${{ secrets.GITHUB_TOKEN }}`; needs `pull-requests: write` |
 | `api_key` | — | Provider key (required for `mode: lens`) |
 | `provider` | `openrouter` | pi provider backend |
@@ -107,8 +107,8 @@ merge is blocked until the MUST FIX findings are resolved.
 The example caller has a single `ENABLED` list (in its `config` job) that drives
 **both** the parallel review matrix **and** the gate — one source of truth.
 Comment a line to disable a lens; uncomment `owasp-web` / `owasp-llm` to enable
-them. Run only `blind,edge-case,acceptance` for correctness; add `sentinel` /
-`viper` for security; add `compliance` for policy; add the OWASP lenses for OWASP
+them. Run only `blind,edge-case,acceptance` for correctness; add `security` /
+`red-team` for security; add `policy` for policy; add the OWASP lenses for OWASP
 coverage. Every enabled lens runs as its own parallel job.
 
 ### Gate the lenses behind your cheap checks
@@ -121,7 +121,7 @@ cheap gates are green (see the example caller):
 ```yaml
 preflight:
   steps:
-    - uses: jamescrowley321/adversarial-review@v1
+    - uses: jamescrowley321/blind-peer-review@v1
       with:
         mode: preflight
         github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -148,7 +148,7 @@ reads the PR and enforces a built-in baseline:
 In CI the Compliance lens enforces **only** this trusted baseline — it does not
 read any rules file out of the pull request under review, so a PR can't weaken its
 own policy check (prompt-injection safety). To add project-specific policy for
-**local** review, commit `.adversarial-review/lenses/compliance.md` (a trusted
+**local** review, commit `.blind-peer-review/lenses/compliance.md` (a trusted
 override the local harnesses read). Pair the lens with the
 [PR template](.github/pull_request_template.md), which carries the AI-provenance
 block contributors fill in.
@@ -197,12 +197,12 @@ The lenses are one markdown library ([`lenses/`](lenses)) with thin per-harness
 adapters, so the same personas review your code in CI *and* in your editor:
 
 - **Claude Code** — install the plugin, then run
-  `/adversarial-review:review` on your working diff, or invoke a single
-  lens (e.g. the `sentinel` agent):
+  `/blind-peer-review:check` on your working diff, or invoke a single
+  lens (e.g. the `security` agent):
 
   ```
-  /plugin marketplace add jamescrowley321/adversarial-review
-  /plugin install adversarial-review@adversarial-review
+  /plugin marketplace add jamescrowley321/blind-peer-review
+  /plugin install blind-peer-review@blind-peer-review
   ```
 
 - **Codex / Cursor** — copy the template from [`adapters/`](adapters) into your
@@ -211,7 +211,7 @@ adapters, so the same personas review your code in CI *and* in your editor:
 
 ### Tune a lens per repo (override)
 
-Commit `.adversarial-review/lenses/<key>.md` to *replace* a base persona for your
+Commit `.blind-peer-review/lenses/<key>.md` to *replace* a base persona for your
 repo (e.g. a PHI/PII-tuned `sentinel.md`). The **local** harnesses read it — it's
 your own trusted file. **CI (the pi Action) never reads it**: a pull request must
 not be able to rewrite its own reviewer (OWASP LLM01), so the gate always runs the
@@ -223,11 +223,11 @@ Run the same lenses against your working tree before you push (Node, no shell):
 
 ```bash
 node scripts/run-local.mjs --base origin/main        # review your branch vs main
-node scripts/run-local.mjs --lens sentinel,viper     # a subset
+node scripts/run-local.mjs --lens sentinel,red-team     # a subset
 ```
 
 Requires the `pi` CLI and a provider key in `OPENROUTER_API_KEY`. Findings are
-written to `.adversarial-review/`.
+written to `.blind-peer-review/`.
 
 ## Credits & provenance
 

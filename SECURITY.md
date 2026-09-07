@@ -1,6 +1,6 @@
 # Security Policy
 
-Adversarial Review is a GitHub Action that runs AI review agents on pull requests
+Blind Peer Review is a GitHub Action that runs AI review agents on pull requests
 with access to a repository's diff and a provider API key. A vulnerability here
 could leak that key, post forged reviews, or let malicious PR content subvert the
 merge gate — so reports are taken seriously and triaged promptly.
@@ -9,7 +9,7 @@ merge gate — so reports are taken seriously and triaged promptly.
 
 **Please do not open a public issue for security problems.**
 
-Report privately through GitHub's **[Private Vulnerability Reporting](https://github.com/jamescrowley321/adversarial-review/security/advisories/new)**
+Report privately through GitHub's **[Private Vulnerability Reporting](https://github.com/jamescrowley321/blind-peer-review/security/advisories/new)**
 (repository **Security** tab → **Report a vulnerability**). This opens a private
 advisory visible only to you and the maintainers, where a fix can be coordinated.
 

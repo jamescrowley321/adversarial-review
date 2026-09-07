@@ -38,8 +38,8 @@ export async function chat({ model, prompt, temperature = 0, maxTokens = 8000, a
         headers: {
           Authorization: `Bearer ${key}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://github.com/jamescrowley321/adversarial-review",
-          "X-Title": "adversarial-review evals",
+          "HTTP-Referer": "https://github.com/jamescrowley321/blind-peer-review",
+          "X-Title": "blind-peer-review evals",
         },
         body: JSON.stringify({
           model,
