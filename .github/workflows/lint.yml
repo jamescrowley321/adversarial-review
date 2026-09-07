@@ -83,15 +83,40 @@ jobs:
           const fs = require("fs");
           const dir = ".github/workflows";
           const bad = [];
+
+          // Reads the WHOLE value of an `if:`, not just its first line. A
+          // condition may be a block scalar spanning several lines, and a
+          // first-line-only check is bypassed by exactly that — which is how
+          // this guard shipped incomplete the first time.
+          const conditions = (txt) => {
+            const lines = txt.split("\n");
+            const out = [];
+            for (let i = 0; i < lines.length; i++) {
+              const m = lines[i].match(/^(\s*)if:(.*)$/);
+              if (!m) continue;
+              const indent = m[1].length;
+              let value = m[2];
+              // Continuation = any following line indented deeper than the key.
+              for (let j = i + 1; j < lines.length; j++) {
+                if (lines[j].trim() === "") continue;
+                if (lines[j].match(/^(\s*)/)[1].length <= indent) break;
+                value += "\n" + lines[j];
+              }
+              out.push({ line: i + 1, value });
+            }
+            return out;
+          };
+
           for (const f of fs.readdirSync(dir).filter((n) => /\.ya?ml$/.test(n))) {
-            fs.readFileSync(`${dir}/${f}`, "utf8").split("\n").forEach((line, i) => {
+            for (const c of conditions(fs.readFileSync(`${dir}/${f}`, "utf8"))) {
               // Conditions only: `env:` and `with:` may reference secrets freely.
-              if (/^\s*if:/.test(line) && /\bsecrets\./.test(line)) bad.push(`${f}:${i + 1}: ${line.trim()}`);
-            });
+              if (/\bsecrets\./.test(c.value)) bad.push(`${f}:${c.line}: ${c.value.trim().split("\n")[0]}`);
+            }
           }
+
           if (bad.length) {
             console.log(`::error::the \`secrets\` context is not available in \`if:\` — these conditions make the whole workflow fail to parse:\n${bad.join("\n")}\n` +
-              `Lift the secret to a job-level \`env:\` and test that instead.`);
+              `Lift the secret into a step that emits a boolean, and test that instead.`);
             process.exit(1);
           }
           console.log("OK: no workflow condition references `secrets`.");
