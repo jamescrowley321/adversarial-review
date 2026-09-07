@@ -11,6 +11,41 @@ previous release and can be curated in the release PR before it is merged. See
 [CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. `[1.4.1]` and
 the older sections below it predate the automation and were written by hand.
 
+## [1.8.0](https://github.com/jamescrowley321/adversarial-review/compare/v1.7.2...v1.8.0) (2026-09-07)
+
+
+### Features
+
+* **action:** deliver findings through a schema-checked tool call ([b975c5a](https://github.com/jamescrowley321/adversarial-review/commit/b975c5aa5a08796540cc2eefd456c4a627eb6422))
+* **action:** deliver findings through a schema-checked tool call ([49d0e53](https://github.com/jamescrowley321/adversarial-review/commit/49d0e53d2f15e3d76340124dbcfa6188102e3a64))
+
+
+### Bug Fixes
+
+* **action:** ask a lens that stopped without submitting to submit ([e882f67](https://github.com/jamescrowley321/adversarial-review/commit/e882f67f4ade156c1ab7284ecb42b0147905a936))
+* **action:** ask a lens that stopped without submitting to submit ([1bbab6a](https://github.com/jamescrowley321/adversarial-review/commit/1bbab6ac6204ce9357c08087d8c9b89101f45fa2))
+* **action:** never throw out of submit_findings ([d5c4928](https://github.com/jamescrowley321/adversarial-review/commit/d5c4928a7f8ecabeac761cdb328f67e93f9a8a5a))
+* **action:** say why 0 is refused, and tolerate a commented default ([f61abc2](https://github.com/jamescrowley321/adversarial-review/commit/f61abc2e0a5eeb068712dd89f92b5e0e151abdab))
+* **action:** validate the diff caps before they reach the engine ([6abbf1b](https://github.com/jamescrowley321/adversarial-review/commit/6abbf1b8777aa16434edd306efd5d4956315cadc))
+* **action:** validate the diff caps before they reach the engine ([7716638](https://github.com/jamescrowley321/adversarial-review/commit/771663849957a6ed1685a31275710e30c1df9c06))
+* **ci:** catch secrets['NAME'] in a condition too, not just secrets.NAME ([d73cb3d](https://github.com/jamescrowley321/adversarial-review/commit/d73cb3d91bcdc88c2830ed00baa8c8a5cd42ece2))
+* **ci:** read the whole if: value, not just its first line ([a306d70](https://github.com/jamescrowley321/adversarial-review/commit/a306d701e5412336795f91a882bcc59d84242aa6))
+* **ci:** scope the release token to the steps that use it ([ef93bfc](https://github.com/jamescrowley321/adversarial-review/commit/ef93bfc3f732a2f927b6651f5c9fc797f4a7d5bf))
+* **ci:** the secrets context is not available in a workflow if: ([f9b46f8](https://github.com/jamescrowley321/adversarial-review/commit/f9b46f8ea439bc901a2eec7e3e83f4a5d831c393))
+* **ci:** the secrets context is not available in a workflow if: ([add9983](https://github.com/jamescrowley321/adversarial-review/commit/add998353f9967a876c36b5c753e3d1354dc5b8e))
+* disclose the diff truncation limits, and stop discarding scorecards ([db1bfc4](https://github.com/jamescrowley321/adversarial-review/commit/db1bfc427b7387f10c04c044cee127e80ac92422))
+* **evals:** a trailing comment is not part of a default value ([1292fc6](https://github.com/jamescrowley321/adversarial-review/commit/1292fc66f6eede27b38e3d76eb1b24ea33db838e))
+* **evals:** renderGetPrDiff refuses a fence instead of emitting one ([5a3cedd](https://github.com/jamescrowley321/adversarial-review/commit/5a3cedd3f4dd2adb76580c601eeda3f4506111db))
+* **evals:** use a bare nosemgrep so alert 24 actually closes ([8bf5031](https://github.com/jamescrowley321/adversarial-review/commit/8bf503122bd86591b09cd2451385b8bcdefed4f4))
+* **lenses:** a visible weakness is not automatically this PR's to fix ([bdf495f](https://github.com/jamescrowley321/adversarial-review/commit/bdf495f0261fa50ea4e1e04370900410be1e1103))
+* **lenses:** a visible weakness is not automatically this PR's to fix ([38228c1](https://github.com/jamescrowley321/adversarial-review/commit/38228c10d5af38f2b803a9b78331061d719ac21e))
+* **lenses:** the refactor exemption is for changes you checked, not labelled ([df8430a](https://github.com/jamescrowley321/adversarial-review/commit/df8430a56c684ffea5590d43163f817c18807819))
+
+
+### Refactors
+
+* **evals:** scan action.yml for defaults instead of matching a built regex ([771b4e7](https://github.com/jamescrowley321/adversarial-review/commit/771b4e708dae421d0332ead3797f044c231001ae))
+
 ## [1.7.2](https://github.com/jamescrowley321/adversarial-review/compare/v1.7.1...v1.7.2) (2026-09-06)
 
 
