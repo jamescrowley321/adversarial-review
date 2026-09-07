@@ -41,6 +41,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { writeFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
+import { createSubmissionTracker, NUDGE_MESSAGE } from "./lib/submission-state.mjs";
 
 const FINDING = Type.Object(
   {
@@ -70,6 +71,38 @@ const PARAMS = Type.Object(
 );
 
 export default function submitFindingsExtension(pi: ExtensionAPI) {
+  const tracker = createSubmissionTracker();
+
+  // A schema-checked channel guarantees the review is well FORMED. It cannot
+  // guarantee the review is SENT. On PR #48 the OWASP LLM lens finished with
+  // the message "✅ Agent session completed" and never called this tool at all
+  // — no findings anywhere, so the job failed exactly as it used to. The tool
+  // fixed malformed output and left "no output" untouched.
+  //
+  // `agent_settled` fires once the run has finished and nothing further is
+  // queued, which is the last moment anything can be recovered. Ask again, at
+  // most twice, then stand aside: the action still has its final-message
+  // fallback and its loud error, and a lens that has refused three times is
+  // not going to be argued into it by a fourth.
+  pi.on("agent_settled", async () => {
+    const decision = tracker.onSettled();
+    if (!decision.nudge) {
+      console.log(`submit_findings: ${decision.reason}`);
+      return;
+    }
+    console.log(`::warning::submit_findings: ${decision.reason} — asking it to submit.`);
+    try {
+      pi.sendUserMessage(NUDGE_MESSAGE);
+    } catch (e) {
+      // Never fatal. If this runtime will not take a programmatic message, the
+      // run should end the way it would have without the nudge, not worse.
+      console.log(
+        `::warning::submit_findings: could not send the nudge (${e instanceof Error ? e.message : String(e)}); ` +
+          `falling through to the action's final-message handling.`,
+      );
+    }
+  });
+
   pi.registerTool({
     name: "submit_findings",
     label: "Submit Findings",
@@ -104,6 +137,7 @@ export default function submitFindingsExtension(pi: ExtensionAPI) {
 
       const out = process.env.ADVERSARIAL_FINDINGS_PATH;
       if (!out || !isAbsolute(out)) {
+        tracker.markCalled(false);
         return fallback("ADVERSARIAL_FINDINGS_PATH is unset or not absolute");
       }
 
@@ -112,8 +146,10 @@ export default function submitFindingsExtension(pi: ExtensionAPI) {
       } catch (e) {
         // ENOSPC, EACCES, EISDIR, a runner with a full disk. Rare, and exactly
         // the moment when throwing away a completed review is least excusable.
+        tracker.markCalled(false);
         return fallback(e instanceof Error ? e.message : String(e));
       }
+      tracker.markCalled(true);
 
       return {
         content: [
