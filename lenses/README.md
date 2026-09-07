@@ -1,17 +1,22 @@
 # Base agents — the adversarial-review lens library
 
 This directory is the **single, harness-neutral source of truth** for the
-adversarial review personas ("lenses") and their shared review contract. Every
-consumer — the GitHub Action (pi in CI), the Claude Code plugin, a Codex or
-Cursor adapter, or the local runner — reads these same markdown files. Tune a
-persona here once and every harness picks it up.
+adversarial review personas ("lenses"). Every consumer — the GitHub Action (pi in
+CI), the Claude Code plugin, a Codex or Cursor adapter, or the local runner —
+reads these same markdown files. Tune a persona here once and every harness picks
+it up.
+
+Only lenses live here. The harness-neutral review contract is one directory up in
+`contracts/shared-review-contract.md`, because this directory is read as a
+registry — a non-lens file sitting in it gets enumerated as a lens.
 
 ## Files
 
 - `manifest.json` — the neutral lens registry: for each lens, its `key`
-  (== filename), display `name` (the `## <name>` review header the merge gate
-  parses), `activation`, and whether it is enabled by default. This is the one
-  list; adapters read it instead of re-hardcoding lens names.
+  (== filename), display `name` (the `lens` field of the findings object the merge
+  gate parses), `activation`, and whether it is enabled by default. This is the
+  one list — adapters and the eval harness read it instead of re-deriving the set
+  from the directory or hardcoding names.
 - `shared-instructions.md` — the **trust boundary**, tool contract, severity
   scale, and output envelope appended to every lens. This is the security
   backbone and is **central and non-overridable** (see below).

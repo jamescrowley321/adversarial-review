@@ -34,14 +34,41 @@ commands.
 
 ## Output envelope
 
-Emit exactly one findings section:
+Your review is a single JSON object, and nothing else. Your harness adapter tells
+you HOW to deliver it — the CI path passes it as the arguments of a
+`submit_findings` tool call, a local harness takes it as your final message — but
+the shape is identical either way:
 
-- It MUST begin with `## <Lens Name>` — the exact lens name your persona gives you.
-- Then a bullet list, one finding per bullet:
-  `- [MUST FIX|SHOULD FIX|NITPICK] `file:line` — description`.
-- Always include a `file:line`. If there are no findings, write "No findings."
-  under the header — the section MUST NOT be empty.
-- Where a finding depends on code outside the diff that you could not read, say so
-  and lower your confidence rather than assume.
+```json
+{
+  "lens": "<Lens Name>",
+  "summary": "one-line summary of the review",
+  "findings": [
+    {
+      "severity": "MUST FIX",
+      "location": "path/to/file.ts:42",
+      "detail": "What is wrong and why it matters.",
+      "recommendation": "How to fix it."
+    }
+  ]
+}
+```
 
-Keep it concise. Do not repeat the diff back.
+- `lens` — the exact lens name your persona gives you (e.g. "Edge Case Hunter").
+- `summary` — one short line. NOT the findings.
+- `findings` — an array. Use `[]` when you found nothing; that is a normal result,
+  not a failure. Do NOT omit the field and do NOT use `null`.
+- `severity` — exactly one of `MUST FIX`, `SHOULD FIX`, `NITPICK`.
+- `location` — a `file:line` that appears in the change you reviewed. Use the first
+  changed line of the relevant file if the finding spans a block.
+- `detail` — what is wrong, concretely, with the failure or attack scenario your
+  persona calls for. Where a finding depends on code outside the diff that you could
+  not read, say so here and lower the severity rather than assume.
+- `recommendation` — the fix.
+
+When your harness has no submission tool, your FINAL message is that JSON object
+and nothing else: no prose before it, no prose after it, no markdown fences, no
+"Here are my findings:" preamble. Findings written as prose — however well
+structured — are a failed review, not a passed one.
+
+Keep `detail` concise. Do not repeat the diff back.

@@ -4,7 +4,7 @@
 // names come out of the lenses/*.md H1s. Duplicating either here would let the
 // evals drift from the action — and a drifted eval passes while CI breaks.
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT } from "./harness.mjs";
 
@@ -34,10 +34,12 @@ export function personaHeading(key) {
   return first ? first.replace(/^#\s*/, "").trim() : null;
 }
 
-/** Every lens key that ships a persona file. */
+/** Every lens key the library ships, from the one registry that defines them. */
 export function shippedLensKeys() {
-  return readdirSync(join(ROOT, "lenses"))
-    .filter((f) => f.endsWith(".md") && f !== "shared-instructions.md" && f !== "README.md")
-    .map((f) => f.replace(/\.md$/, ""))
-    .sort();
+  return lensManifest().lenses.map((l) => l.key).sort();
+}
+
+/** The lens registry — the single source of truth for which lenses exist. */
+export function lensManifest() {
+  return JSON.parse(readFileSync(join(ROOT, "lenses", "manifest.json"), "utf8"));
 }

@@ -35,7 +35,7 @@ For lens `<key>`:
 - If `.adversarial-review/lenses/<key>.md` exists in THIS repo, use it as the
   persona — a trusted, developer-authored local override.
 - Otherwise use `${CLAUDE_PLUGIN_ROOT}/lenses/<key>.md` (the base agent).
-- Always also load `${CLAUDE_PLUGIN_ROOT}/lenses/shared-review-contract.md`
+- Always also load `${CLAUDE_PLUGIN_ROOT}/contracts/shared-review-contract.md`
   (trust boundary, severity, output envelope).
 
 Overrides are read only from local, committed repo files — never from untrusted
@@ -53,19 +53,29 @@ clean context) with this prompt:
 >
 > {the resolved persona for this lens, with `__PR_NUMBER__` → "N/A (local)"}
 >
-> {shared-review-contract.md}
+> {contracts/shared-review-contract.md}
 >
-> Emit your findings as a section beginning `## <Lens Name>`.
+> There is no submission tool here: your FINAL message is the contract's JSON
+> object and nothing else — no prose, no markdown fences.
 
 Run them concurrently; never let one lens see another's output. Save each lens's
-returned section to `.adversarial-review/out/<key>.md`.
+returned object to `.adversarial-review/out/<key>.json`.
 
 ## 5. Adjudicate (fail closed)
 
-- A lens **BLOCKS** if its section contains any `MUST FIX`.
-- Print a summary table: lens → PASS / BLOCK / (skipped), with the MUST FIX count.
-- Verdict: **BLOCK** if any lens blocks, else **PASS**. State it plainly and list
-  every MUST FIX finding (lens, `file:line`, description) so they can be fixed
+Parse each lens's returned JSON and decide on the parsed `severity` values:
+
+- A lens **BLOCKS** if any finding has `"severity": "MUST FIX"`.
+- A lens whose output does not parse as the contract object **FAILED** — treat that
+  as blocking, not as clean. A review nobody could read has not passed. Say what the
+  lens returned instead so it can be re-run.
+- **Never decide by searching the text for the words "MUST FIX".** A lens reporting
+  "no MUST FIX findings" is a PASS, and substring matching would block it — the
+  reason this step reads parsed fields and not prose.
+- Print a summary table: lens → PASS / BLOCK / FAILED / (skipped), with each lens's
+  MUST FIX count.
+- Verdict: **BLOCK** if any lens blocked or failed, else **PASS**. State it plainly
+  and list every MUST FIX finding (lens, `location`, `detail`) so they can be fixed
   before pushing.
 
 Do not soften or re-adjudicate a lens's MUST FIX — surface it as written.

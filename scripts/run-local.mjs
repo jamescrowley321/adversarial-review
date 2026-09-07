@@ -3,7 +3,7 @@
 //
 // Runs the review personas against your working branch BEFORE you push, using
 // the pi CLI. Each lens reads the branch diff and writes its findings to
-// .adversarial-review/out/<lens>.md. A repo can override any persona by committing
+// .adversarial-review/out/<lens>.json. A repo can override any persona by committing
 // .adversarial-review/lenses/<lens>.md (trusted local tuning). Language-agnostic.
 //
 // Usage:
@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LENS_DIR = join(ROOT, "lenses");
+const CONTRACT = join(ROOT, "contracts", "shared-review-contract.md");
 const OUT = ".adversarial-review/out";              // ephemeral: diff + per-lens findings
 const OVERRIDE_DIR = ".adversarial-review/lenses";  // committed: per-repo persona overrides
 
@@ -68,6 +69,8 @@ writeFileSync(patch, diff);
 if (!diff.trim()) { console.log(`No changes vs ${base} — nothing to review.`); process.exit(0); }
 console.log(`Diff: ${diff.split("\n").length} lines vs ${base}`);
 
+const verdicts = [];
+
 for (const key of lenses) {
   const name = NAMES[key];
   if (!name) { console.log(`skip: unknown lens '${key}'`); continue; }
@@ -78,6 +81,9 @@ for (const key of lenses) {
   if (personaPath === overridePath) console.log(`  (local override: ${overridePath})`);
 
   const persona = readFileSync(personaPath, "utf8").split("__PR_NUMBER__").join("N/A (local review)");
+  // The shared contract carries the trust boundary, the severity terms and the
+  // output envelope. Local runs used to inline their own envelope and skip the
+  // rest, which left a local review with no injection defence at all.
   const prompt = [
     "LOCAL MODE: There is no pull request. The full diff to review is in the file",
     `\`${patch}\` (a \`git diff\`). Read that file instead of calling any GitHub tool.`,
@@ -85,24 +91,60 @@ for (const key of lenses) {
     "",
     persona,
     "",
-    "## Output (local)",
-    `Print your findings to stdout as a markdown section beginning with \`## ${name}\`,`,
-    "using the severity terms MUST FIX / SHOULD FIX / NITPICK and `file:line` references.",
-    'If no findings, write "No findings."',
+    readFileSync(CONTRACT, "utf8"),
+    "",
+    "There is no submission tool here: print the contract's JSON object to stdout as",
+    "your entire output — no prose, no markdown fences.",
   ].join("\n");
 
   console.log(`── ${name} ──`);
   const res = spawnSync(PI_BIN, ["--provider", PROVIDER, "--model", MODEL, "--thinking", THINKING], {
     input: prompt, encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
   });
-  if (res.error) { console.log(`  ! could not run ${PI_BIN}: ${res.error.message}`); continue; }
-  writeFileSync(join(OUT, `${key}.md`), res.stdout || "");
-  if (res.status === 0) {
-    console.log(`  → ${join(OUT, `${key}.md`)}`);
-  } else {
+  if (res.error) {
+    console.log(`  ! could not run ${PI_BIN}: ${res.error.message}`);
+    verdicts.push({ key, name, state: "FAILED", must: 0, note: `could not run ${PI_BIN}` });
+    continue;
+  }
+  const out = res.stdout || "";
+  writeFileSync(join(OUT, `${key}.json`), out);
+  if (res.status !== 0) {
     writeFileSync(join(OUT, `${key}.err`), res.stderr || "");
     console.log(`  ! exit ${res.status} (see ${join(OUT, `${key}.err`)})`);
+    verdicts.push({ key, name, state: "FAILED", must: 0, note: `exit ${res.status}` });
+    continue;
   }
+  // Adjudicate on the parsed severity, never on the text. A lens that writes
+  // "no MUST FIX findings" is a pass, and substring matching would block it.
+  let parsed = null;
+  try { parsed = JSON.parse(out.trim()); } catch { /* handled below */ }
+  if (!parsed || !Array.isArray(parsed.findings)) {
+    console.log(`  ! ${join(OUT, `${key}.json`)} is not the contract object — lens FAILED`);
+    verdicts.push({ key, name, state: "FAILED", must: 0, note: "output is not the contract object" });
+    continue;
+  }
+  const must = parsed.findings.filter((f) => f && f.severity === "MUST FIX").length;
+  verdicts.push({ key, name, state: must ? "BLOCK" : "PASS", must, findings: parsed.findings });
+  console.log(`  → ${join(OUT, `${key}.json`)} (${must} MUST FIX)`);
 }
 
 console.log(`\nDone. Findings in ${OUT}/. Review MUST FIX items before pushing.`);
+
+// Fail closed: a MUST FIX blocks, and so does a lens whose review could not be
+// read. A review nobody could parse has not passed.
+console.log("\n── verdict ──");
+for (const v of verdicts) {
+  const detail = v.state === "FAILED" ? ` (${v.note})` : ` (${v.must} MUST FIX)`;
+  console.log(`  ${v.state.padEnd(6)} ${v.name}${detail}`);
+}
+const blocked = verdicts.filter((v) => v.state !== "PASS");
+if (blocked.length) {
+  for (const v of verdicts) {
+    for (const f of (v.findings || []).filter((f) => f.severity === "MUST FIX")) {
+      console.log(`\n  [${v.name}] ${f.location}\n    ${f.detail}`);
+    }
+  }
+  console.log(`\nBLOCK — ${blocked.length} lens(es) blocked or failed.`);
+  process.exit(1);
+}
+console.log("\nPASS — no MUST FIX findings.");
