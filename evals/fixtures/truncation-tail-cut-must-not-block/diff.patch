@@ -11,7 +11,7 @@ index 0000000..3fd0a9b
 +export const preferences = Router();
 +
 +preferences.get("/api/preferences", requireSession, async (req, res) => {
-+  const row = await db.one(
++  const row = await db.oneOrNone(
 +    "select digest_enabled, quiet_start, quiet_end from user_preferences where user_id = $1",
 +    [req.session.userId],
 +  );
