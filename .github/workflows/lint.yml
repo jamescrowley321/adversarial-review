@@ -70,3 +70,55 @@ jobs:
 
       - name: Validate the example workflow parses as YAML
         run: npx --yes js-yaml@4 examples/caller-workflow.yml > /dev/null
+
+  # The version bump is derived from commit messages, so a mistyped type is a
+  # mis-versioned release. That was survivable while a human merged every
+  # release PR by hand; once releases merge themselves, nothing else is looking.
+  # v1.7.2 shipped a brand-new input as a PATCH because every commit said `fix:`.
+  commits:
+    name: Conventional Commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Every commit in this PR declares a release type
+        shell: node {0}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          const { execFileSync } = require("child_process");
+
+          // release-please's Angular preset. `feat` -> minor, `fix` -> patch,
+          // a `!` or a BREAKING CHANGE footer -> major; the rest do not release.
+          const TYPES = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "style", "test"];
+          const SUBJECT = new RegExp(`^(${TYPES.join("|")})(\\([^)]+\\))?!?: .+`);
+
+          const base = process.env.BASE_SHA, head = process.env.HEAD_SHA;
+          const raw = execFileSync("git", ["log", "--format=%H%x1f%P%x1f%s", `${base}..${head}`], { encoding: "utf8" });
+          const commits = raw.split("\n").filter(Boolean).map((l) => {
+            const [sha, parents, subject] = l.split("\x1f");
+            return { sha, merge: parents.trim().split(/\s+/).length > 1, subject };
+          });
+
+          if (!commits.length) {
+            console.log("No commits in range — nothing to check.");
+            process.exit(0);
+          }
+
+          // Merge commits are authored by GitHub, not by us, and their subjects
+          // ("Merge branch 'main' into ...") are not ours to shape.
+          const bad = commits.filter((c) => !c.merge && !SUBJECT.test(c.subject));
+          for (const c of bad) {
+            console.log(`::error::${c.sha.slice(0, 8)} "${c.subject}" is not a Conventional Commit. ` +
+              `Expected "<type>(<scope>)?: <subject>" where type is one of: ${TYPES.join(", ")}.`);
+          }
+          if (bad.length) {
+            console.log(`::error::${bad.length} of ${commits.length} commit(s) would land on main without a release type, ` +
+              `so release-please cannot derive the right version bump from them.`);
+            process.exit(1);
+          }
+          console.log(`OK: ${commits.filter((c) => !c.merge).length} commit(s) checked, all conventional.`);
