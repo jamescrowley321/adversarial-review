@@ -11,6 +11,32 @@ previous release and can be curated in the release PR before it is merged. See
 [CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. `[1.4.1]` and
 the older sections below it predate the automation and were written by hand.
 
+## [3.0.0](https://github.com/jamescrowley321/blind-peer-review/compare/v2.0.0...v3.0.0) (2026-09-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* none for callers — but the action now reads lenses/manifest.json at runtime, so a consumer vendoring only action.yml no longer works. Use the action by reference, as documented.
+* `lenses` is now JSON, and `required_checks` is one name per line. Callers pass `lenses: ${{ needs.config.outputs.matrix }}` and a block scalar for `required_checks`.
+
+### Features
+
+* **codex:** give the Codex adapter a real install path ([46441aa](https://github.com/jamescrowley321/blind-peer-review/commit/46441aa29b7417be38b4af47a637e1772ef01e1b))
+* take the gate's lens set as JSON and check names one per line ([a5abb74](https://github.com/jamescrowley321/blind-peer-review/commit/a5abb742011b0f7843cc5fe070606c7fa55621ba))
+
+
+### Bug Fixes
+
+* **action:** no templated expression in an input description, and see it next time ([5afe14b](https://github.com/jamescrowley321/blind-peer-review/commit/5afe14b52d0d47cda1803fdf2e7969023713ce9a))
+* address the gate's findings on the vendor script and its own tests ([7b2e274](https://github.com/jamescrowley321/blind-peer-review/commit/7b2e2749d0d05b83aa3ad8d4cb7fb41959a9376d))
+* **ci:** the guard's own comment broke the workflow it guards ([4abceb1](https://github.com/jamescrowley321/blind-peer-review/commit/4abceb19cf98b65c35a1c5267fdf98d23d383a61))
+* **extension:** send the nudge on the ctx pi hands the handler ([1b45ab6](https://github.com/jamescrowley321/blind-peer-review/commit/1b45ab62a38519a82b34cf34634ba432011db3d2))
+
+
+### Refactors
+
+* action.yml reads the lens registry instead of carrying a copy ([2de1bcf](https://github.com/jamescrowley321/blind-peer-review/commit/2de1bcfc698848c6040a813b0fd30c76829a7fac))
+
 ## [2.0.0](https://github.com/jamescrowley321/blind-peer-review/compare/v1.8.0...v2.0.0) (2026-09-08)
 
 
