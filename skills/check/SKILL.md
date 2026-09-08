@@ -19,7 +19,10 @@ local twin of the CI merge gate; the personas are the same markdown files.
   fall back to `git diff --merge-base <default-branch> HEAD`, then `git diff HEAD`.
 - If the diff is empty, say so and stop.
 - Write the diff to `.blind-peer-review/out/review-diff.patch` so every lens reads
-  the exact same bytes.
+  the exact same bytes. This is required, not an optimisation: the lens agents have
+  no shell — they read this file and cannot produce a diff themselves. That is
+  deliberate. A lens marinates in untrusted content, so it holds no capability to
+  act on it; you do the shell work before any lens sees anything.
 
 ## 2. Choose the lenses
 
