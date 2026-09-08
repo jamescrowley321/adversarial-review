@@ -71,6 +71,35 @@ jobs:
       - name: Syntax-check the models-config module
         run: node --check scripts/models-config.mjs
 
+      - name: Syntax-check the vendor script
+        run: node --check scripts/vendor.mjs
+
+      - name: The vendored set must carry the neutral contract, not the CI one
+        shell: node {0}
+        run: |
+          // A local harness has no submit_findings and no get_pr_diff. Vendoring
+          // shared_instructions.md to one is how "ignore that CI wording" gets
+          // back into the prompts.
+          const { execFileSync } = require("child_process");
+          const fs = require("fs");
+          const os = require("os");
+          const path = require("path");
+          const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "vendor-"));
+          execFileSync("node", ["scripts/vendor.mjs", "--into", tmp]);
+          const dir = path.join(tmp, ".blind-peer-review", "vendor");
+          const lenses = fs.readdirSync(path.join(dir, "lenses"));
+          if (lenses.includes("shared_instructions.md")) {
+            console.log("::error::vendor shipped the CI-side contract to a local harness");
+            process.exit(1);
+          }
+          for (const need of ["SOURCE.md", "shared_review_contract.md"]) {
+            if (!fs.existsSync(path.join(dir, need))) {
+              console.log(`::error::vendor did not write ${need}`);
+              process.exit(1);
+            }
+          }
+          console.log(`Vendor OK: ${lenses.length - 1} personas + manifest + neutral contract.`);
+
       - name: Unit-test models-config validation (allowlist, types, clean-state)
         run: node --test scripts/models-config.test.mjs
 
