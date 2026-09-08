@@ -1,5 +1,5 @@
 ---
-name: owasp-llm
+name: owasp_llm
 description: Reviews AI/LLM code against the OWASP GenAI/LLM Top 10 (2026) — prompt injection, sensitive-info disclosure, excessive agency, output handling, etc. (LLM01–LLM10); self-skips when the diff touches no LLM/AI surface. Use when reviewing prompt/agent/RAG/model code, or when asked to run the OWASP LLM lens.
 tools: Read, Grep, Glob
 model: inherit

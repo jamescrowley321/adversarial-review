@@ -15,7 +15,7 @@ import { runParseStep, runGateStep, botReview, agentJsonComment, HEAD_SHA } from
 import { LENS_KEYS, lensName, personaHeading, shippedLensKeys, readPersona, readShared } from "./lib/lenses.mjs";
 import { foldReps, score, violations, THRESHOLDS } from "./lib/scorecard.mjs";
 import { extractStepScript, runNodeScript } from "./lib/action-script.mjs";
-import { composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault, listFixtureIds } from "./lib/fixtures.mjs";
+import { composeFromAction, composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault, listFixtureIds } from "./lib/fixtures.mjs";
 import { truncateDiff, truncateDiffByBytes, byteMarker, renderGetPrDiff } from "./lib/pi-diff.mjs";
 import { createSubmissionTracker, NUDGE_MESSAGE } from "../extensions/lib/submission-state.mjs";
 import { ROOT as REPO_ROOT } from "./lib/harness.mjs";
@@ -730,6 +730,30 @@ describe("fetch-path fixtures", () => {
     const d = actionDiffDefaults();
     assert.ok(prompt.includes(`${d.maxLines} lines`), "the prompt does not name the shipped line cap");
     assert.ok(prompt.includes(`${d.maxBytes} bytes`), "the prompt does not name the shipped byte cap");
+  });
+
+  test("a lens key that is not in the registry never reaches the filesystem", async () => {
+    // The key is interpolated into a persona path, so `lens: ../action.yml` would
+    // load an arbitrary file out of the action directory and run it as the
+    // reviewer's instructions. Workflow inputs are author-controlled rather than
+    // PR-controlled, so this is depth, not a boundary — but the class is closed.
+    // These resolve to files that EXIST (README.md at the action root), so without
+    // the registry check they compose happily and the reviewer's instructions
+    // become whatever that file says. A key that merely doesn't exist would die on
+    // "Missing persona file" with or without the guard — testing that proves
+    // nothing, which is the trap this suite exists to avoid.
+    for (const bad of ["../README", "cold_read/../../README"]) {
+      await assert.rejects(() => composeFromAction(bad), `compose accepted "${bad}"`);
+    }
+  });
+
+  test("every key the registry declares still composes", async () => {
+    // The other half: a validator that rejects everything would also pass the
+    // test above.
+    for (const key of shippedLensKeys()) {
+      const prompt = await composeFromAction(key);
+      assert.ok(prompt.length > 0, `${key} composed empty`);
+    }
   });
 
   test("a fetch-path prompt names the cap that was actually applied", async () => {

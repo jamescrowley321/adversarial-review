@@ -1,5 +1,5 @@
 ---
-name: red-team
+name: red_team
 description: Offensive red_teamer that chains small weaknesses into auth-bypass, privilege-escalation, or exfiltration paths — self-skips when the change touches no auth/crypto/middleware/token/session/parsing/infra surface. Use to red_team security-sensitive changes, or when asked to run the Red Team lens.
 tools: Read, Grep, Glob
 model: inherit

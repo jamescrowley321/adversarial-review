@@ -1,5 +1,5 @@
 ---
-name: edge-case
+name: edge_case
 description: Exhaustive path tracer that walks every branch and boundary in the changed code for genuinely unhandled paths that crash, corrupt data, or return wrong results. Use to find unhandled edge cases in the working change, or when asked to run the Edge Cases lens.
 tools: Read, Grep, Glob
 model: inherit

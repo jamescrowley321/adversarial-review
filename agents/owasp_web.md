@@ -1,5 +1,5 @@
 ---
-name: owasp-web
+name: owasp_web
 description: Reviews the working diff against the OWASP Web Application Top 10 (2021), tagging each genuinely applicable, exploitable-in-context finding with its category (A01–A10). Use for an OWASP web-risk pass on a change, or when asked to run the OWASP Web lens.
 tools: Read, Grep, Glob
 model: inherit

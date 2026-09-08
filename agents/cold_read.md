@@ -1,5 +1,5 @@
 ---
-name: cold-read
+name: cold_read
 description: Zero-context skeptic that hunts logic errors, missing error handling, injection, and footguns in the working diff — assuming the worst about every line. Use to adversarially review changes before pushing, or when asked to run the Cold Read lens.
 tools: Read, Grep, Glob
 model: inherit

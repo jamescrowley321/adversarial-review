@@ -72,8 +72,11 @@ console.log(`Diff: ${diff.split("\n").length} lines vs ${base}`);
 const verdicts = [];
 
 for (const key of lenses) {
+  // Registry membership is also the path guard: `key` is about to be joined into
+  // a filename, and only keys the manifest declares get that far, so a traversal
+  // sequence never reaches the filesystem.
   const name = NAMES[key];
-  if (!name) { console.log(`skip: unknown lens '${key}'`); continue; }
+  if (!name) { console.log(`skip: unknown lens '${key}' (not in lenses/manifest.json)`); continue; }
   // A committed local override wins over the base persona (trusted, static tuning).
   const overridePath = join(OVERRIDE_DIR, `${key}.md`);
   const personaPath = existsSync(overridePath) ? overridePath : join(LENS_DIR, `${key}.md`);

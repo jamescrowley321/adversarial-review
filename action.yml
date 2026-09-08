@@ -195,6 +195,17 @@ runs:
 
         const actionPath = process.env.ACTION_PATH;
         const lensKey = process.env.LENS_KEY;
+        // The key becomes a file path, so it is checked against the registry before
+        // it is joined to one. `lens: ../action.yml` would otherwise load an
+        // arbitrary file out of the action directory as the persona — swapping the
+        // reviewer for something that is not a reviewer. Workflow inputs are
+        // author-controlled, not PR-controlled, so this is defence in depth rather
+        // than a boundary; it costs one read and removes the class.
+        const registry = path.join(actionPath, "lenses", "manifest.json");
+        const known = JSON.parse(fs.readFileSync(registry, "utf8")).lenses.map((l) => l.key);
+        if (!/^[a-z0-9_]+$/.test(lensKey) || !known.includes(lensKey)) {
+          die(`Unknown lens "${lensKey}". Known lenses: ${known.join(", ")}.`);
+        }
         const personaPath = path.join(actionPath, "lenses", `${lensKey}.md`);
         const sharedPath = path.join(actionPath, "lenses", "shared_instructions.md");
         if (!fs.existsSync(personaPath)) die(`Missing persona file ${personaPath}`);

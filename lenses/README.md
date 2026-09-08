@@ -15,9 +15,11 @@ registry — a non-lens file sitting in it gets enumerated as a lens.
 Lens identifiers are `snake_case` — the manifest keys, the `lens:` input values,
 the persona filenames and the fixture directories. Display names are Title Case
 ("Cold Read"), because they are read by humans in review headers and check names.
-The one exception is each agent's `name:` frontmatter field, which stays
-kebab-case: that is the plugin platform's invocation identifier, and every agent
-and skill shipped in the official marketplace is kebab-cased there.
+Agent `name:` fields match their lens key, so there is exactly one spelling of a
+lens anywhere in the project. Note that every agent and skill in the official
+marketplace is kebab-cased in that field; if a future Claude Code release rejects
+underscores there, these agents stop loading by name — the `/blind-peer-review:check`
+skill is unaffected, since it resolves personas by path and never by agent name.
 
 ## Files
 
