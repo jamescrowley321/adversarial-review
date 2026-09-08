@@ -733,6 +733,22 @@ describe("fetch-path fixtures", () => {
     assert.ok(prompt.includes(`${d.maxBytes} bytes`), "the prompt does not name the shipped byte cap");
   });
 
+  test("action.yml carries no copy of the lens list", () => {
+    // The registry was decorative until the action read it: manifest.json said
+    // the policy lens was called "Compliance" for a whole release and nothing
+    // noticed, because every consumer read action.yml's own hardcoded table
+    // instead. A second list is worse than no list — it can be wrong silently.
+    const yml = rf(pjoin(REPO_ROOT, "action.yml"), "utf8");
+    assert.doesNotMatch(yml, /const NAMES = \{/, "action.yml has grown a lens table again");
+    for (const key of shippedLensKeys()) {
+      assert.doesNotMatch(
+        yml,
+        new RegExp(`["']?${key}["']?\\s*:\\s*["']`),
+        `action.yml hardcodes the display name for "${key}"`,
+      );
+    }
+  });
+
   test("the gate's expected set comes from the matrix object itself", async () => {
     // The point of taking JSON is that the caller passes the SAME value that
     // built its matrix, so "the jobs that ran" and "the set the gate waits for"

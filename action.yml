@@ -149,21 +149,26 @@ runs:
         IN_PR: ${{ inputs.pr_number }}
         EVENT_PR: ${{ github.event.pull_request.number }}
         IN_KEY: ${{ inputs.api_key }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
         const fs = require("fs");
+        const path = require("path");
         const append = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`);
         const die = (m) => { console.log(`::error::${m}`); process.exit(1); };
 
-        const NAMES = {
-          "cold_read": "Cold Read",
-          "edge_case": "Edge Cases",
-          acceptance: "Acceptance Criteria",
-          security: "Security Review",
-          "red_team": "Red Team",
-          policy: "Policy & Provenance",
-          "owasp_web": "OWASP Web Top 10",
-          "owasp_llm": "OWASP LLM Top 10",
-        };
+        // Lens display names come from the registry, not a copy of it. This table
+        // used to be hand-maintained here, in the lint workflow, in the eval
+        // harness and in every consumer workflow — five lists that a comment
+        // asked you to keep in sync. lenses/manifest.json is the one list now.
+        const registryPath = path.join(process.env.ACTION_PATH, "lenses", "manifest.json");
+        let NAMES;
+        try {
+          NAMES = Object.fromEntries(
+            JSON.parse(fs.readFileSync(registryPath, "utf8")).lenses.map((l) => [l.key, l.name]),
+          );
+        } catch (e) {
+          die(`Could not read the lens registry at ${registryPath}: ${e.message}`);
+        }
 
         const pr = (process.env.IN_PR || "").trim() || (process.env.EVENT_PR || "").trim();
         if (!pr) die("No PR number (not a pull_request event and pr_number unset)");

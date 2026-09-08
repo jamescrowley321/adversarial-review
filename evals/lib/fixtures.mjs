@@ -165,7 +165,7 @@ export async function resolveContext({ mode = "gate", lenses = "", lens = "" } =
   try {
     await runNodeScript(src, {
       env: {
-        IN_MODE: mode, IN_LENS: lens, IN_LENSES: lenses, IN_PR: String(EVAL_PR),
+        IN_MODE: mode, IN_LENS: lens, IN_LENSES: lenses, IN_PR: String(EVAL_PR), ACTION_PATH: ROOT,
         EVENT_PR: String(EVAL_PR), IN_KEY: "test-key",
         GITHUB_OUTPUT: outFile, GITHUB_ENV: join(dir, "github_env"),
       },

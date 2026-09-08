@@ -40,11 +40,18 @@ jobs:
             process.exit(1);
           }
 
-          // action.yml must map every lens key we ship a persona for.
+          // The inverse of the old check: action.yml must NOT map lens names. It
+          // reads lenses/manifest.json now, and a second copy of the list is worse
+          // than none — the registry sat wrong ("Compliance" for the policy lens)
+          // through a whole release because nothing read it.
           const action = fs.readFileSync("action.yml", "utf8");
-          const unmapped = LENSES.filter((l) => !action.includes(`${l}:`) && !action.includes(`"${l}":`));
-          if (unmapped.length) {
-            console.log(`::error::action.yml has no name mapping for: ${unmapped.join(", ")}`);
+          if (/const NAMES = \{/.test(action)) {
+            console.log("::error::action.yml has grown a lens table again — it must read lenses/manifest.json");
+            process.exit(1);
+          }
+          const missingPersona = LENSES.filter((l) => !fs.existsSync(`lenses/${l}.md`));
+          if (missingPersona.length) {
+            console.log(`::error::registry declares lenses with no persona file: ${missingPersona.join(", ")}`);
             process.exit(1);
           }
 
@@ -56,7 +63,7 @@ jobs:
             console.log(`::error::action.yml input description contains a \$\{\{ \}\} expression (breaks action loading):\n${badDesc.join("\n")}`);
             process.exit(1);
           }
-          console.log(`Layout OK: ${LENSES.length} lenses, all referenced; no templated descriptions.`);
+          console.log(`Layout OK: ${LENSES.length} lenses from the registry, each with a persona; no lens table in action.yml; no templated descriptions.`);
 
       - name: Syntax-check the Node runner
         run: node --check scripts/run-local.mjs
