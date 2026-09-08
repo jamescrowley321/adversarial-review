@@ -202,7 +202,15 @@ runs:
         // author-controlled, not PR-controlled, so this is defence in depth rather
         // than a boundary; it costs one read and removes the class.
         const registry = path.join(actionPath, "lenses", "manifest.json");
-        const known = JSON.parse(fs.readFileSync(registry, "utf8")).lenses.map((l) => l.key);
+        let known;
+        try {
+          known = JSON.parse(fs.readFileSync(registry, "utf8")).lenses.map((l) => l.key);
+        } catch (e) {
+          // The registry ships with the action, so this means a corrupt checkout
+          // rather than a caller mistake — but an unhandled parse throw buries that
+          // under a stack trace in a log nobody reads to the end.
+          die(`Could not read the lens registry at ${registry}: ${e.message}`);
+        }
         if (!/^[a-z0-9_]+$/.test(lensKey) || !known.includes(lensKey)) {
           die(`Unknown lens "${lensKey}". Known lenses: ${known.join(", ")}.`);
         }

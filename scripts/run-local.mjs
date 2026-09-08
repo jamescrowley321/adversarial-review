@@ -29,7 +29,23 @@ const OVERRIDE_DIR = ".blind-peer-review/lenses";  // committed: per-repo person
 // The lens registry is the shared, harness-neutral manifest — one source of truth.
 // (Local mode reviews code; Compliance is a PR-time policy check, so it is not in
 // the default local set — add it explicitly with --lens if wanted.)
-const manifest = JSON.parse(readFileSync(join(LENS_DIR, "manifest.json"), "utf8"));
+let manifest;
+try {
+  manifest = JSON.parse(readFileSync(join(LENS_DIR, "manifest.json"), "utf8"));
+} catch (e) {
+  console.error(`error: could not read the lens registry at ${join(LENS_DIR, "manifest.json")} — ${e.message}`);
+  process.exit(1);
+}
+let contractText;
+try {
+  contractText = readFileSync(CONTRACT, "utf8");
+} catch (e) {
+  // Without the contract a lens has no trust boundary and no output envelope.
+  // Reviewing anyway would produce unparseable findings from an unguarded lens,
+  // so stop rather than degrade quietly.
+  console.error(`error: could not read the review contract at ${CONTRACT} — ${e.message}`);
+  process.exit(1);
+}
 const NAMES = Object.fromEntries(manifest.lenses.map((l) => [l.key, l.name]));
 
 function printHelp() {
@@ -47,7 +63,16 @@ let THINKING = process.env.THINKING || "medium";
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === "--base") base = argv[++i];
+  if (a === "--base") {
+    base = argv[++i];
+    // Not shell injection — the diff goes through execFileSync with an argument
+    // array, so there is no shell to inject into. This stops a ref that begins
+    // with "-" from being read by git as an option instead of a revision.
+    if (!/^[A-Za-z0-9_./~^-]+$/.test(base ?? "") || base.startsWith("-")) {
+      console.error(`error: '${base}' is not a valid git ref for --base`);
+      process.exit(1);
+    }
+  }
   else if (a === "--lens") lenses = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
   else if (a === "--model") MODEL = argv[++i];
   else if (a === "--provider") PROVIDER = argv[++i];
@@ -94,7 +119,7 @@ for (const key of lenses) {
     "",
     persona,
     "",
-    readFileSync(CONTRACT, "utf8"),
+    contractText,
     "",
     "There is no submission tool here: print the contract's JSON object to stdout as",
     "your entire output — no prose, no markdown fences.",
