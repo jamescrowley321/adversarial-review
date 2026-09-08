@@ -1,7 +1,7 @@
 {
   "name": "blind-peer-review",
   "displayName": "Blind Peer Review",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Blind peer review for your working diff: independent, context-starved referees (Cold Read, Edge Cases, Acceptance Criteria, Security Review, Red Team, plus opt-in Policy & Provenance and OWASP) that each report separately and any of which can block. One lens library shared with the CI Action, Codex, Cursor and pi.",
   "author": {
     "name": "James Crowley"
