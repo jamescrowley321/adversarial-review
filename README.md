@@ -196,18 +196,41 @@ to pin exactly. Releases are cut with [release-please]; see
 The lenses are one markdown library ([`lenses/`](lenses)) with thin per-harness
 adapters, so the same personas review your code in CI *and* in your editor:
 
-- **Claude Code** — install the plugin, then run
-  `/blind-peer-review:check` on your working diff, or invoke a single
-  lens (e.g. the `security` agent):
+- **Claude Code** — install the plugin, then run `/blind-peer-review:check` on
+  your working diff, or invoke a single lens (e.g. the `security` agent):
 
   ```
   /plugin marketplace add jamescrowley321/blind-peer-review
   /plugin install blind-peer-review@blind-peer-review
   ```
 
-- **Codex / Cursor** — copy the template from [`adapters/`](adapters) into your
-  repo (`AGENTS.md` for Codex, `.cursor/rules/` for Cursor) and vendor `lenses/`.
+  **There is nothing to publish first.** A marketplace *is* a git repo with a
+  `.claude-plugin/marketplace.json` in it — there is no central registry to be
+  listed in and no review step. `marketplace add` takes `owner/repo`, and clones
+  over your existing git credentials, so a **private repo works** as long as you
+  can clone it. Installs record the marketplace's commit SHA and move when you
+  refresh it, the same pinning shape the CI workflow uses.
+
+- **Codex** — from inside the repo Codex works in, no checkout of this one
+  needed:
+
+  ```
+  npx github:jamescrowley321/blind-peer-review#v3 --into . --print-agents-block
+  ```
+
+  That writes `.blind-peer-review/vendor/` (personas, registry and contract,
+  version-stamped) and prints the block to paste into that repo's `AGENTS.md`.
+  Codex reads `AGENTS.md` from the repo it is in and cannot reach into an
+  action, so the personas have to be on disk. Re-run after a release to re-sync;
+  don't hand-edit the vendored copies.
+
+  `#v3` follows the major; use `#v3.0.0` to pin exactly. If you'd rather not run
+  `npx`, clone this repo and run `node scripts/vendor.mjs --into /path/to/repo`
+  — same thing. See [`adapters/`](adapters).
+
 - **pi (local)** — `node scripts/run-local.mjs` (below).
+- **Cursor** — [`adapters/cursor/`](adapters/cursor) exists but is unverified;
+  we run Codex, pi and Claude Code.
 
 ### Tune a lens per repo (override)
 

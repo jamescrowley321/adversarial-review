@@ -1,0 +1,13 @@
+{
+  "name": "blind-peer-review",
+  "version": "3.0.0",
+  "description": "Blind peer review for pull requests — independent, context-starved AI referees, any of which fails the merge.",
+  "license": "Apache-2.0",
+  "author": "James Crowley",
+  "repository": { "type": "git", "url": "git+https://github.com/jamescrowley321/blind-peer-review.git" },
+  "type": "module",
+  "private": true,
+  "bin": { "blind-peer-review": "scripts/vendor.mjs" },
+  "files": ["scripts/", "lenses/", "contracts/", "adapters/", "agents/", "skills/", "action.yml", "version.txt"],
+  "engines": { "node": ">=20" }
+}

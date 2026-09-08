@@ -98,6 +98,24 @@ jobs:
       - name: Syntax-check the vendor script
         run: node --check scripts/vendor.mjs
 
+      - name: package.json version, bin and files must hold up the npx install path
+        shell: node {0}
+        run: |
+          // `npx github:owner/repo#tag` is the documented Codex install. It runs
+          // the bin out of the fetched tarball, so a missing bin, a stale
+          // version, or a files list that omits lenses/ breaks the install with
+          // no other symptom.
+          const fs = require("fs");
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const version = fs.readFileSync("version.txt", "utf8").trim();
+          const fail = (m) => { console.log(`::error::${m}`); process.exit(1); };
+          if (pkg.version !== version) fail(`package.json ${pkg.version} != version.txt ${version}`);
+          if (pkg.bin?.["blind-peer-review"] !== "scripts/vendor.mjs") fail("package.json bin no longer points at scripts/vendor.mjs");
+          for (const need of ["scripts/", "lenses/", "contracts/"]) {
+            if (!(pkg.files || []).includes(need)) fail(`package.json files omits ${need} — npx would fetch a package that cannot vendor`);
+          }
+          console.log(`npx install path OK: bin -> ${pkg.bin["blind-peer-review"]}, v${version}.`);
+
       - name: The vendored set must carry the neutral contract, not the CI one
         shell: node {0}
         run: |
