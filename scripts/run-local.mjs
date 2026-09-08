@@ -68,7 +68,8 @@ for (let i = 0; i < argv.length; i++) {
     // Not shell injection — the diff goes through execFileSync with an argument
     // array, so there is no shell to inject into. This stops a ref that begins
     // with "-" from being read by git as an option instead of a revision.
-    if (!/^[A-Za-z0-9_./~^-]+$/.test(base ?? "") || base.startsWith("-")) {
+    if (base === undefined) { console.error("error: --base requires a value"); process.exit(1); }
+    if (!/^[A-Za-z0-9_./~^-]+$/.test(base) || base.startsWith("-")) {
       console.error(`error: '${base}' is not a valid git ref for --base`);
       process.exit(1);
     }

@@ -148,7 +148,7 @@ reads the PR and enforces a built-in baseline:
 In CI the Compliance lens enforces **only** this trusted baseline — it does not
 read any rules file out of the pull request under review, so a PR can't weaken its
 own policy check (prompt-injection safety). To add project-specific policy for
-**local** review, commit `.blind-peer-review/lenses/compliance.md` (a trusted
+**local** review, commit `.blind-peer-review/lenses/policy.md` (a trusted
 override the local harnesses read). Pair the lens with the
 [PR template](.github/pull_request_template.md), which carries the AI-provenance
 block contributors fill in.

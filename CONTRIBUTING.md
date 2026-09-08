@@ -17,7 +17,7 @@ together.
 | `lenses/*.md` | The six review personas + the shared output contract |
 | `scripts/run-local.mjs` | Local pre-CI runner (Node) |
 | `examples/caller-workflow.yml` | Drop-in consumer workflow |
-| `.github/blind-peer-review/compliance.md` | This repo's own Compliance-lens rules |
+| `.github/blind-peer-review/policy.md` | This repo's own Policy & Provenance rules |
 | `.github/workflows/` | Self-review dogfood, lint, and release automation |
 | `release-please-config.json`, `.release-please-manifest.json`, `version.txt` | release-please config + tracked version (see [Cutting a release](#cutting-a-release)) |
 

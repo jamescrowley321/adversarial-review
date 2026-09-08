@@ -21,7 +21,9 @@ jobs:
         shell: node {0}
         run: |
           const fs = require("fs");
-          const LENSES = ["cold_read", "edge_case", "acceptance", "security", "red_team", "policy", "owasp_web", "owasp_llm"];
+          // The registry is the one list. Hardcoding it here is how the layout
+          // check goes stale against the manifest it is meant to be checking.
+          const LENSES = JSON.parse(fs.readFileSync("lenses/manifest.json", "utf8")).lenses.map((l) => l.key);
           const required = [
             "action.yml",
             "lenses/shared_instructions.md",
