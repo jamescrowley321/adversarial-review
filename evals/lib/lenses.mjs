@@ -8,16 +8,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT } from "./harness.mjs";
 
-/** Parse the `const NAMES = { ... }` table straight out of action.yml. */
-export function lensNames(yml = readFileSync(join(ROOT, "action.yml"), "utf8")) {
-  const m = yml.match(/const NAMES = \{([\s\S]*?)\n\s*\};/);
-  if (!m) throw new Error("action.yml: could not find the `const NAMES = {…}` lens table");
-  const names = {};
-  for (const line of m[1].split("\n")) {
-    const kv = line.match(/^\s*"?([a-z0-9_-]+)"?:\s*"([^"]+)",?\s*$/);
-    if (kv) names[kv[1]] = kv[2];
-  }
-  if (!Object.keys(names).length) throw new Error("action.yml: NAMES table parsed empty");
+/** Lens display names, from the one registry the action itself reads. */
+export function lensNames() {
+  const names = Object.fromEntries(lensManifest().lenses.map((l) => [l.key, l.name]));
+  if (!Object.keys(names).length) throw new Error("lenses/manifest.json declares no lenses");
   return names;
 }
 

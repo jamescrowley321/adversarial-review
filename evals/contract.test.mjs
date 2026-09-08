@@ -15,9 +15,10 @@ import { runParseStep, runGateStep, botReview, agentJsonComment, HEAD_SHA } from
 import { LENS_KEYS, lensName, personaHeading, shippedLensKeys, readPersona, readShared } from "./lib/lenses.mjs";
 import { foldReps, score, violations, THRESHOLDS } from "./lib/scorecard.mjs";
 import { extractStepScript, runNodeScript } from "./lib/action-script.mjs";
-import { composeFromAction, composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault, listFixtureIds } from "./lib/fixtures.mjs";
+import { composeFromAction, resolveContext, composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault, listFixtureIds } from "./lib/fixtures.mjs";
 import { truncateDiff, truncateDiffByBytes, byteMarker, renderGetPrDiff } from "./lib/pi-diff.mjs";
 import { createSubmissionTracker, NUDGE_MESSAGE } from "../extensions/lib/submission-state.mjs";
+import { attachNudge } from "../extensions/lib/nudge.mjs";
 import { ROOT as REPO_ROOT } from "./lib/harness.mjs";
 import { mkdtempSync, readFileSync as rf, rmSync } from "node:fs";
 import { join as pjoin } from "node:path";
@@ -732,6 +733,68 @@ describe("fetch-path fixtures", () => {
     assert.ok(prompt.includes(`${d.maxBytes} bytes`), "the prompt does not name the shipped byte cap");
   });
 
+  test("no input description contains a templated expression, on any line", () => {
+    // A `${{ }}` anywhere inside a description is evaluated when the action
+    // loads, and the action then fails to load at all — every lens job dies with
+    // "Unrecognized named-value". The lint guard for this only inspected the
+    // `description:` line itself, so an example written on the second line of a
+    // `description: |` block sailed past it and broke all eight jobs.
+    const lines = rf(pjoin(REPO_ROOT, "action.yml"), "utf8").split("\n");
+    const bad = [];
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^(\s*)description:(.*)$/);
+      if (!m) continue;
+      const [, indent, rest] = m;
+      if (/\$\{\{/.test(rest)) { bad.push(lines[i]); continue; }
+      if (!/^\s*[|>]/.test(rest)) continue;
+      for (let j = i + 1; j < lines.length; j++) {
+        if (lines[j].trim() && lines[j].search(/\S/) <= indent.length) break;
+        if (/\$\{\{/.test(lines[j])) bad.push(lines[j]);
+      }
+    }
+    assert.deepEqual(bad, [], `templated expression inside an input description:\n${bad.join("\n")}`);
+  });
+
+  test("action.yml carries no copy of the lens list", () => {
+    // The registry was decorative until the action read it: manifest.json said
+    // the policy lens was called "Compliance" for a whole release and nothing
+    // noticed, because every consumer read action.yml's own hardcoded table
+    // instead. A second list is worse than no list — it can be wrong silently.
+    const yml = rf(pjoin(REPO_ROOT, "action.yml"), "utf8");
+    assert.doesNotMatch(yml, /const NAMES = \{/, "action.yml has grown a lens table again");
+    for (const key of shippedLensKeys()) {
+      assert.doesNotMatch(
+        yml,
+        new RegExp(`["']?${key}["']?\\s*:\\s*["']`),
+        `action.yml hardcodes the display name for "${key}"`,
+      );
+    }
+  });
+
+  test("the gate's expected set comes from the matrix object itself", async () => {
+    // The point of taking JSON is that the caller passes the SAME value that
+    // built its matrix, so "the jobs that ran" and "the set the gate waits for"
+    // cannot drift. The old input was a parallel list kept in sync by a comment.
+    const r = await resolveContext({
+      lenses: JSON.stringify({ include: [{ lens: "cold_read", name: "Cold Read" }, { lens: "red_team", name: "Red Team" }] }),
+    });
+    assert.equal(r.expected, "Cold Read|Red Team");
+  });
+
+  test("a plain JSON array of keys also resolves", async () => {
+    const r = await resolveContext({ lenses: JSON.stringify(["cold_read", "security"]) });
+    assert.equal(r.expected, "Cold Read|Security Review");
+  });
+
+  test("a delimited string is refused rather than half-parsed", async () => {
+    // The failure this removes: a list split on a character that can occur
+    // inside a value. A check name containing a comma became three names that
+    // never reported and preflight waited out its entire timeout.
+    for (const bad of ["cold_read,security", "cold_read security", "cold_read\nsecurity", ""]) {
+      await assert.rejects(() => resolveContext({ lenses: bad }), `accepted ${JSON.stringify(bad)}`);
+    }
+  });
+
   test("a lens key that is not in the registry never reaches the filesystem", async () => {
     // The key is interpolated into a persona path, so `lens: ../action.yml` would
     // load an arbitrary file out of the action directory and run it as the
@@ -1183,6 +1246,58 @@ describe("diff cap validation", () => {
 // lives in a dependency-free module precisely so it can be tested here — the
 // extension itself imports the agent SDK and cannot be loaded offline.
 
+describe("nudge delivery", () => {
+  // The decision to nudge was always tested. Delivery was not, and delivery is
+  // what broke in production: the handler used the captured `pi`, which pi
+  // invalidates on session replacement, so every nudge threw and the fallback
+  // never fired.
+  const fakePi = (onCapturedSend) => {
+    let handler;
+    return {
+      on: (_type, h) => { handler = h; },
+      sendUserMessage: onCapturedSend,
+      fire: (ctx) => handler({ type: "agent_settled" }, ctx),
+    };
+  };
+
+  test("the nudge goes to the ctx pi hands the handler, not the captured api", async () => {
+    const captured = [];
+    // A captured api that throws exactly as a stale ctx does.
+    const pi = fakePi(() => { throw new Error("This extension ctx is stale after session replacement or reload."); });
+    const sent = [];
+    attachNudge(pi, createSubmissionTracker(), () => {});
+    await pi.fire({ sendUserMessage: (m) => sent.push(m) });
+    assert.deepEqual(sent, [NUDGE_MESSAGE], "the nudge did not reach the per-emit ctx");
+    assert.deepEqual(captured, [], "the captured api should not have been used");
+  });
+
+  test("it falls back to the captured api when the runtime hands over nothing usable", async () => {
+    const sent = [];
+    const pi = fakePi((m) => sent.push(m));
+    attachNudge(pi, createSubmissionTracker(), () => {});
+    await pi.fire(undefined);
+    assert.deepEqual(sent, [NUDGE_MESSAGE]);
+  });
+
+  test("a delivery failure is logged, never thrown", async () => {
+    const logs = [];
+    const pi = fakePi(() => { throw new Error("nope"); });
+    attachNudge(pi, createSubmissionTracker(), (m) => logs.push(m));
+    await pi.fire({ sendUserMessage: () => { throw new Error("nope"); } });
+    assert.ok(logs.some((l) => /could not send the nudge/.test(l)), "the failure was not reported");
+  });
+
+  test("a lens that already submitted is not nudged", async () => {
+    const sent = [];
+    const tracker = createSubmissionTracker();
+    tracker.markCalled(true); // the review landed
+    const pi = fakePi(() => {});
+    attachNudge(pi, tracker, () => {});
+    await pi.fire({ sendUserMessage: (m) => sent.push(m) });
+    assert.deepEqual(sent, [], "a lens that already submitted was nudged anyway");
+  });
+});
+
 describe("unsubmitted review nudge", () => {
   test("an agent that stopped without submitting is asked again", () => {
     const t = createSubmissionTracker();
@@ -1244,6 +1359,12 @@ describe("unsubmitted review nudge", () => {
     const body = src.slice(src.indexOf("async execute("));
     assert.equal((body.match(/tracker\.markCalled\(false\)/g) || []).length, 2, "both failure paths must mark a failed call");
     assert.equal((body.match(/tracker\.markCalled\(true\)/g) || []).length, 1, "the success path must mark a recorded call");
-    assert.match(src, /pi\.on\("agent_settled"/, "the nudge is not wired to agent_settled");
+    // The wiring moved into lib/nudge.mjs so it could be exercised directly (see
+    // "nudge delivery" above). Both halves are still asserted: the extension
+    // attaches it, and the module binds it to agent_settled.
+    assert.match(src, /attachNudge\(pi, tracker\)/, "the extension no longer attaches the nudge");
+    const nudgeSrc = rf(pjoin(REPO_ROOT, "extensions", "lib", "nudge.mjs"), "utf8");
+    assert.match(nudgeSrc, /\.on\("agent_settled"/, "the nudge is not wired to agent_settled");
+    assert.match(nudgeSrc, /ctx\?\.sendUserMessage/, "the nudge must prefer the per-emit ctx over the captured api");
   });
 });

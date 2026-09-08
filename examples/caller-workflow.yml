@@ -33,7 +33,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.pick.outputs.matrix }}
-      csv: ${{ steps.pick.outputs.csv }}
     steps:
       - id: pick
         shell: node {0}
@@ -62,7 +61,6 @@ jobs:
           const include = keys.map((k) => ({ lens: k, name: NAMES[k] }));
           const fs = require("fs");
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include })}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `csv=${keys.join(",")}\n`);
 
   # Deterministic gate: the paid lenses (review) `needs:` this, so they never run
   # unless the cheap checks pass first. The fork/bot gate lives here and cascades.
@@ -83,12 +81,20 @@ jobs:
       pull-requests: read
     steps:
       - name: Wait for deterministic checks
-        uses: jamescrowley321/blind-peer-review@v1
+        uses: jamescrowley321/blind-peer-review@v2
         with:
           mode: preflight
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # EXACT check-run names that must pass before the lenses run — edit per repo.
-          required_checks: "lint, typecheck, build, secret-scan"
+          # EXACT check-run names that must pass before the lenses run — edit per
+          # repo, ONE PER LINE. Not comma-separated: check names routinely contain
+          # commas ("Build, lint and test"), and splitting on one turns a single
+          # real check into fragments that never report, so preflight waits out its
+          # entire timeout for checks that do not exist.
+          required_checks: |
+            lint
+            typecheck
+            build
+            secret-scan
 
   review:
     name: ${{ matrix.name }}
@@ -103,7 +109,7 @@ jobs:
       matrix: ${{ fromJSON(needs.config.outputs.matrix) }}
     steps:
       - name: ${{ matrix.name }}
-        uses: jamescrowley321/blind-peer-review@v1
+        uses: jamescrowley321/blind-peer-review@v2
         with:
           mode: lens
           lens: ${{ matrix.lens }}
@@ -138,7 +144,7 @@ jobs:
     steps:
       - name: Record exempt PR
         if: github.event.pull_request.head.repo.fork == true || github.actor == 'dependabot[bot]'
-        run: echo "Adversarial review is intentionally exempt for fork and Dependabot PRs."
+        run: echo "Blind peer review is intentionally exempt for fork and Dependabot PRs."
       - name: Fail closed when prerequisites did not succeed
         if: >-
           github.event.pull_request.head.repo.fork == false &&
@@ -149,15 +155,17 @@ jobs:
           PREFLIGHT_RESULT: ${{ needs.preflight.result }}
           REVIEW_RESULT: ${{ needs.review.result }}
         run: |
-          echo "::error::Adversarial review prerequisites did not succeed (config=$CONFIG_RESULT, preflight=$PREFLIGHT_RESULT, review=$REVIEW_RESULT)."
+          echo "::error::Blind peer review prerequisites did not succeed (config=$CONFIG_RESULT, preflight=$PREFLIGHT_RESULT, review=$REVIEW_RESULT)."
           exit 1
       - name: Adjudicate lenses
         if: >-
           github.event.pull_request.head.repo.fork == false &&
           github.actor != 'dependabot[bot]' &&
           needs.config.result == 'success' && needs.preflight.result == 'success' && needs.review.result == 'success'
-        uses: jamescrowley321/blind-peer-review@v1
+        uses: jamescrowley321/blind-peer-review@v2
         with:
           mode: gate
-          lenses: ${{ needs.config.outputs.csv }}
+          # The same value that built the matrix — the gate's expected set and the
+          # jobs that ran are then one thing, not two kept in sync by hand.
+          lenses: ${{ needs.config.outputs.matrix }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

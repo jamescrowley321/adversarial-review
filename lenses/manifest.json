@@ -40,7 +40,7 @@
     },
     {
       "key": "policy",
-      "name": "Compliance",
+      "name": "Policy & Provenance",
       "activation": "always",
       "default_enabled": false,
       "summary": "AI-provenance disclosure, human accountability, no committed secrets."

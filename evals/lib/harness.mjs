@@ -219,18 +219,17 @@ export function agentJsonComment({ lens, id = 500, findings = [], bot = true, fe
  * step publishes as LENS_HEADING. Returns "" for a name no persona claims.
  */
 export function headingForDisplayName(displayName) {
-  const yml = actionYml();
-  const m = yml.match(/const NAMES = \{([\s\S]*?)\n\s*\};/);
-  if (!m) return "";
-  for (const line of m[1].split("\n")) {
-    const kv = line.match(/^\s*"?([a-z0-9_-]+)"?:\s*"([^"]+)",?\s*$/);
-    if (kv && kv[2] === displayName) {
-      try {
-        const txt = readFileSync(join(ROOT, "lenses", `${kv[1]}.md`), "utf8");
-        const h = txt.split("\n").find((l) => l.startsWith("# "));
-        return h ? h.replace(/^#\s*/, "").trim() : "";
-      } catch { return ""; }
-    }
+  // From the registry — action.yml no longer carries a copy of it. Read here
+  // rather than imported from lenses.mjs, which imports ROOT from this module:
+  // the cycle leaves ROOT uninitialised at load time.
+  const registry = JSON.parse(readFileSync(join(ROOT, "lenses", "manifest.json"), "utf8"));
+  for (const lens of registry.lenses) {
+    if (lens.name !== displayName) continue;
+    try {
+      const txt = readFileSync(join(ROOT, "lenses", `${lens.key}.md`), "utf8");
+      const h = txt.split("\n").find((l) => l.startsWith("# "));
+      return h ? h.replace(/^#\s*/, "").trim() : "";
+    } catch { return ""; }
   }
   return "";
 }

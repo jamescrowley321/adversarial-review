@@ -88,7 +88,7 @@ merge is blocked until the MUST FIX findings are resolved.
 | `mode` | — (required) | `lens` or `gate` |
 | `submit_findings_tool` | `true` | Deliver the review through a schema-checked `submit_findings` tool call instead of the agent's final message. `false` runs message-only. |
 | `lens` | — | Required for `mode: lens`: `cold_read` \| `edge_case` \| `acceptance` \| `security` \| `red_team` \| `policy` \| `owasp_web` \| `owasp_llm` |
-| `lenses` | `cold_read,edge_case,acceptance,security,red_team` | Gate's expected set — must match the caller matrix |
+| `lenses` | `["cold_read","edge_case","acceptance","security","red_team"]` | Gate's expected set, as JSON. Pass `${{ needs.config.outputs.matrix }}` so it cannot drift from the jobs that ran |
 | `github_token` | — (required) | `${{ secrets.GITHUB_TOKEN }}`; needs `pull-requests: write` |
 | `api_key` | — | Provider key (required for `mode: lens`) |
 | `provider` | `openrouter` | pi provider backend |
