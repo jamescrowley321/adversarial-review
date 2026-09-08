@@ -11,6 +11,39 @@ previous release and can be curated in the release PR before it is merged. See
 [CONTRIBUTING.md](CONTRIBUTING.md#cutting-a-release) for the flow. `[1.4.1]` and
 the older sections below it predate the automation and were written by hand.
 
+## [2.0.0](https://github.com/jamescrowley321/blind-peer-review/compare/v1.8.0...v2.0.0) (2026-09-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* lens keys are snake_case. `blind,edge-case,acceptance,sentinel, viper` is now `cold_read,edge_case,acceptance,security,red_team`, and the persona, contract and fixture filenames follow.
+* the action, the plugin, the lens keys and the local override directory are all renamed. Consumers must update `uses:`, any `lens:`/`lenses:` values, and `.adversarial-review/` paths.
+
+### Features
+
+* put every local harness on one lens registry and one findings contract ([fd44b64](https://github.com/jamescrowley321/blind-peer-review/commit/fd44b64629b8233d249f7ee870120a4c24ad6059))
+* rename to blind-peer-review and give every lens a descriptive name ([c2a7417](https://github.com/jamescrowley321/blind-peer-review/commit/c2a7417f8ae09639ddd35494bf5eb98ad3224d0b))
+* ship a Claude Code plugin + harness-neutral lens library; close the compliance injection point ([33aae5d](https://github.com/jamescrowley321/blind-peer-review/commit/33aae5db9c9a0c1729388e76a8493d1eecc7db44))
+
+
+### Bug Fixes
+
+* **action:** validate the lens key against the registry before it becomes a path ([c0594fd](https://github.com/jamescrowley321/blind-peer-review/commit/c0594fdfa3f5bd3a34b79348dae8270f4a89a2bb))
+* **agents:** repair the renamed persona paths and take shell away from the lenses ([6822c90](https://github.com/jamescrowley321/blind-peer-review/commit/6822c906ad5e0c61bbddde273fa802ce26ed995d))
+* correct the policy lens's override path and read the lint list from the registry ([867881c](https://github.com/jamescrowley321/blind-peer-review/commit/867881c386128712b371b286bbe106610b1f85e7))
+* **evals:** make the incident-3 guard era-aware after the lens rename ([a7e77a3](https://github.com/jamescrowley321/blind-peer-review/commit/a7e77a3cda2ec6e370d1b5762d86de3387c617ed))
+* fail legibly when the registry or contract cannot be read ([5a43832](https://github.com/jamescrowley321/blind-peer-review/commit/5a43832d4152df441ea3b6f835a76d2d26493709))
+
+
+### Refactors
+
+* standardize lens identifiers on snake_case ([95b71aa](https://github.com/jamescrowley321/blind-peer-review/commit/95b71aa83ddabfa2a6e5db17da12d07f70a5164e))
+
+
+### Documentation
+
+* add AI code-review market analysis + long-term roadmap ([21d8d32](https://github.com/jamescrowley321/blind-peer-review/commit/21d8d3209952b4a8e495ae77488e50aaccf89588))
+
 ## [1.8.0](https://github.com/jamescrowley321/adversarial-review/compare/v1.7.2...v1.8.0) (2026-09-07)
 
 
