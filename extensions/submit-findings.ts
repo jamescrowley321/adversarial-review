@@ -41,7 +41,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { writeFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
-import { createSubmissionTracker, NUDGE_MESSAGE } from "./lib/submission-state.mjs";
+import { createSubmissionTracker } from "./lib/submission-state.mjs";
+import { attachNudge } from "./lib/nudge.mjs";
 
 const FINDING = Type.Object(
   {
@@ -84,24 +85,7 @@ export default function submitFindingsExtension(pi: ExtensionAPI) {
   // most twice, then stand aside: the action still has its final-message
   // fallback and its loud error, and a lens that has refused three times is
   // not going to be argued into it by a fourth.
-  pi.on("agent_settled", async () => {
-    const decision = tracker.onSettled();
-    if (!decision.nudge) {
-      console.log(`submit_findings: ${decision.reason}`);
-      return;
-    }
-    console.log(`::warning::submit_findings: ${decision.reason} — asking it to submit.`);
-    try {
-      pi.sendUserMessage(NUDGE_MESSAGE);
-    } catch (e) {
-      // Never fatal. If this runtime will not take a programmatic message, the
-      // run should end the way it would have without the nudge, not worse.
-      console.log(
-        `::warning::submit_findings: could not send the nudge (${e instanceof Error ? e.message : String(e)}); ` +
-          `falling through to the action's final-message handling.`,
-      );
-    }
-  });
+  attachNudge(pi, tracker);
 
   pi.registerTool({
     name: "submit_findings",

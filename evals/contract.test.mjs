@@ -18,6 +18,7 @@ import { extractStepScript, runNodeScript } from "./lib/action-script.mjs";
 import { composeFromAction, resolveContext, composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault, listFixtureIds } from "./lib/fixtures.mjs";
 import { truncateDiff, truncateDiffByBytes, byteMarker, renderGetPrDiff } from "./lib/pi-diff.mjs";
 import { createSubmissionTracker, NUDGE_MESSAGE } from "../extensions/lib/submission-state.mjs";
+import { attachNudge } from "../extensions/lib/nudge.mjs";
 import { ROOT as REPO_ROOT } from "./lib/harness.mjs";
 import { mkdtempSync, readFileSync as rf, rmSync } from "node:fs";
 import { join as pjoin } from "node:path";
@@ -1207,6 +1208,58 @@ describe("diff cap validation", () => {
 // lives in a dependency-free module precisely so it can be tested here — the
 // extension itself imports the agent SDK and cannot be loaded offline.
 
+describe("nudge delivery", () => {
+  // The decision to nudge was always tested. Delivery was not, and delivery is
+  // what broke in production: the handler used the captured `pi`, which pi
+  // invalidates on session replacement, so every nudge threw and the fallback
+  // never fired.
+  const fakePi = (onCapturedSend) => {
+    let handler;
+    return {
+      on: (_type, h) => { handler = h; },
+      sendUserMessage: onCapturedSend,
+      fire: (ctx) => handler({ type: "agent_settled" }, ctx),
+    };
+  };
+
+  test("the nudge goes to the ctx pi hands the handler, not the captured api", async () => {
+    const captured = [];
+    // A captured api that throws exactly as a stale ctx does.
+    const pi = fakePi(() => { throw new Error("This extension ctx is stale after session replacement or reload."); });
+    const sent = [];
+    attachNudge(pi, createSubmissionTracker(), () => {});
+    await pi.fire({ sendUserMessage: (m) => sent.push(m) });
+    assert.deepEqual(sent, [NUDGE_MESSAGE], "the nudge did not reach the per-emit ctx");
+    assert.deepEqual(captured, [], "the captured api should not have been used");
+  });
+
+  test("it falls back to the captured api when the runtime hands over nothing usable", async () => {
+    const sent = [];
+    const pi = fakePi((m) => sent.push(m));
+    attachNudge(pi, createSubmissionTracker(), () => {});
+    await pi.fire(undefined);
+    assert.deepEqual(sent, [NUDGE_MESSAGE]);
+  });
+
+  test("a delivery failure is logged, never thrown", async () => {
+    const logs = [];
+    const pi = fakePi(() => { throw new Error("nope"); });
+    attachNudge(pi, createSubmissionTracker(), (m) => logs.push(m));
+    await pi.fire({ sendUserMessage: () => { throw new Error("nope"); } });
+    assert.ok(logs.some((l) => /could not send the nudge/.test(l)), "the failure was not reported");
+  });
+
+  test("a lens that already submitted is not nudged", async () => {
+    const sent = [];
+    const tracker = createSubmissionTracker();
+    tracker.onSubmitted?.();
+    const pi = fakePi(() => {});
+    attachNudge(pi, tracker, () => {});
+    await pi.fire({ sendUserMessage: (m) => sent.push(m) });
+    if (typeof tracker.onSubmitted === "function") assert.deepEqual(sent, [], "a submitted lens was nudged anyway");
+  });
+});
+
 describe("unsubmitted review nudge", () => {
   test("an agent that stopped without submitting is asked again", () => {
     const t = createSubmissionTracker();
@@ -1268,6 +1321,12 @@ describe("unsubmitted review nudge", () => {
     const body = src.slice(src.indexOf("async execute("));
     assert.equal((body.match(/tracker\.markCalled\(false\)/g) || []).length, 2, "both failure paths must mark a failed call");
     assert.equal((body.match(/tracker\.markCalled\(true\)/g) || []).length, 1, "the success path must mark a recorded call");
-    assert.match(src, /pi\.on\("agent_settled"/, "the nudge is not wired to agent_settled");
+    // The wiring moved into lib/nudge.mjs so it could be exercised directly (see
+    // "nudge delivery" above). Both halves are still asserted: the extension
+    // attaches it, and the module binds it to agent_settled.
+    assert.match(src, /attachNudge\(pi, tracker\)/, "the extension no longer attaches the nudge");
+    const nudgeSrc = rf(pjoin(REPO_ROOT, "extensions", "lib", "nudge.mjs"), "utf8");
+    assert.match(nudgeSrc, /\.on\("agent_settled"/, "the nudge is not wired to agent_settled");
+    assert.match(nudgeSrc, /ctx\?\.sendUserMessage/, "the nudge must prefer the per-emit ctx over the captured api");
   });
 });
