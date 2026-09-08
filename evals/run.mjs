@@ -4,7 +4,7 @@
 //   node evals/run.mjs                    # smoke set, 3 reps  (needs OPENROUTER_API_KEY)
 //   node evals/run.mjs --full             # every fixture
 //   node evals/run.mjs --lens acceptance  # one lens
-//   node evals/run.mjs --fixture acceptance-docs-only
+//   node evals/run.mjs --fixture acceptance_docs_only
 //   node evals/run.mjs --reps 5           # more reps = tighter stability estimate
 //   node evals/run.mjs --max-tokens 12000 # raise if reps report truncation
 //   node evals/run.mjs --model google/gemini-2.5-pro

@@ -102,7 +102,7 @@ export function truncateDiff(diff, maxLines, maxBytes) {
  *
  * validate-fixtures.mjs catches this earlier and with a better message. This
  * check is here so the guarantee belongs to the function rather than to a
- * caller remembering to validate first — raised by Sentinel on #40, and right:
+ * caller remembering to validate first — raised by Security Review on #40, and right:
  * a check that lives only in the validator is a check that a future caller
  * silently opts out of.
  */

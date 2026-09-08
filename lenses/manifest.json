@@ -1,0 +1,63 @@
+{
+  "manifest_version": 1,
+  "shared_instructions": "shared_instructions.md",
+  "consumer_override_dir": ".blind-peer-review/lenses",
+  "lenses": [
+    {
+      "key": "cold_read",
+      "name": "Cold Read",
+      "activation": "always",
+      "default_enabled": true,
+      "summary": "Zero-context logic bugs, off-by-one, unhandled errors, footguns."
+    },
+    {
+      "key": "edge_case",
+      "name": "Edge Cases",
+      "activation": "always",
+      "default_enabled": true,
+      "summary": "Unhandled branches, boundaries, and async gaps."
+    },
+    {
+      "key": "acceptance",
+      "name": "Acceptance Criteria",
+      "activation": "always",
+      "default_enabled": true,
+      "summary": "Verifies the PR's stated acceptance criteria are met and tested."
+    },
+    {
+      "key": "security",
+      "name": "Security Review",
+      "activation": "always",
+      "default_enabled": true,
+      "summary": "Exploitable auth / PHI / PII / tenant-isolation vulnerabilities."
+    },
+    {
+      "key": "red_team",
+      "name": "Red Team",
+      "activation": "security-surface",
+      "default_enabled": true,
+      "summary": "Red-team attack paths; self-skips when no auth/middleware/infra surface."
+    },
+    {
+      "key": "policy",
+      "name": "Compliance",
+      "activation": "always",
+      "default_enabled": false,
+      "summary": "AI-provenance disclosure, human accountability, no committed secrets."
+    },
+    {
+      "key": "owasp_web",
+      "name": "OWASP Web Top 10",
+      "activation": "always",
+      "default_enabled": false,
+      "summary": "OWASP Web Application Top 10 (2021)."
+    },
+    {
+      "key": "owasp_llm",
+      "name": "OWASP LLM Top 10",
+      "activation": "llm-surface",
+      "default_enabled": false,
+      "summary": "OWASP GenAI/LLM Top 10 (2026); self-skips when no LLM/AI surface."
+    }
+  ]
+}

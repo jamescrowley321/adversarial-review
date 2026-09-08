@@ -1,6 +1,6 @@
-# Adversarial Review — consumer workflow.
+# Blind Peer Review — consumer workflow.
 #
-# Copy this to `.github/workflows/adversarial-review.yml`. Add repo secret
+# Copy this to `.github/workflows/blind-peer-review.yml`. Add repo secret
 # OPENROUTER_API_KEY, then require the "Merge Gate" check in branch protection.
 #
 # TOGGLE STEPS in the `ENABLED` list in the `config` job below: comment a line to
@@ -9,7 +9,7 @@
 #
 # Pin the action to a released tag (or a commit SHA for OpenSSF Scorecard).
 
-name: Adversarial Review
+name: Blind Peer Review
 
 on:
   pull_request:
@@ -17,7 +17,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: adversarial-review-${{ github.ref }}
+  group: blind-peer-review-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -39,20 +39,20 @@ jobs:
         shell: node {0}
         env:
           ENABLED: |
-            blind          # logic bugs, footguns (zero context)
-            edge-case      # unhandled branches / boundaries
+            cold_read          # logic bugs, footguns (zero context)
+            edge_case      # unhandled branches / boundaries
             acceptance     # PR acceptance criteria met + tested
-            sentinel       # exploitable security vulnerabilities
-            viper          # red-team attack paths (auth/infra only)
-            compliance     # AI-provenance policy + your own rules
-            # owasp-web    # OWASP Web Top 10 (2021) — optional, runs in parallel
-            # owasp-llm    # OWASP GenAI/LLM Top 10 (2026) — optional, for LLM apps
+            security       # exploitable security vulnerabilities
+            red_team          # red_team attack paths (auth/infra only)
+            policy     # AI-provenance policy + your own rules
+            # owasp_web    # OWASP Web Top 10 (2021) — optional, runs in parallel
+            # owasp_llm    # OWASP GenAI/LLM Top 10 (2026) — optional, for LLM apps
         run: |
           const NAMES = {
-            blind: "Blind Hunter", "edge-case": "Edge Case Hunter",
-            acceptance: "Acceptance Auditor", sentinel: "Sentinel", viper: "Viper",
-            compliance: "Compliance Auditor", "owasp-web": "OWASP Web Top 10",
-            "owasp-llm": "OWASP LLM Top 10",
+            "cold_read": "Cold Read", "edge_case": "Edge Cases",
+            acceptance: "Acceptance Criteria", security: "Security Review", "red_team": "Red Team",
+            policy: "Policy & Provenance", "owasp_web": "OWASP Web Top 10",
+            "owasp_llm": "OWASP LLM Top 10",
           };
           const keys = (process.env.ENABLED || "").split("\n")
             .map((l) => l.replace(/#.*/, "").trim()).filter(Boolean);
@@ -83,7 +83,7 @@ jobs:
       pull-requests: read
     steps:
       - name: Wait for deterministic checks
-        uses: jamescrowley321/adversarial-review@v1
+        uses: jamescrowley321/blind-peer-review@v1
         with:
           mode: preflight
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -103,7 +103,7 @@ jobs:
       matrix: ${{ fromJSON(needs.config.outputs.matrix) }}
     steps:
       - name: ${{ matrix.name }}
-        uses: jamescrowley321/adversarial-review@v1
+        uses: jamescrowley321/blind-peer-review@v1
         with:
           mode: lens
           lens: ${{ matrix.lens }}
@@ -156,7 +156,7 @@ jobs:
           github.event.pull_request.head.repo.fork == false &&
           github.actor != 'dependabot[bot]' &&
           needs.config.result == 'success' && needs.preflight.result == 'success' && needs.review.result == 'success'
-        uses: jamescrowley321/adversarial-review@v1
+        uses: jamescrowley321/blind-peer-review@v1
         with:
           mode: gate
           lenses: ${{ needs.config.outputs.csv }}

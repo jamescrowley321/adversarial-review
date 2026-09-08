@@ -1,0 +1,17 @@
+{
+  "class": "must-not-block",
+  "smoke": true,
+  "pr_title": "refactor(pricing): table-driven plan lookup",
+  "guards": "False-positive shape: a behaviour-preserving refactor with no security surface. A security lens that blocks here is crying wolf, and a lens nobody trusts is a lens nobody reads.",
+  "lenses": {
+    "security": {
+      "block": false
+    },
+    "cold_read": {
+      "block": false
+    },
+    "edge_case": {
+      "block": false
+    }
+  }
+}

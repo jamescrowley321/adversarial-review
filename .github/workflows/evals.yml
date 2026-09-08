@@ -26,7 +26,7 @@
 # hand OPENROUTER_API_KEY to code the PR author controls. That is no worse than
 # what any same-repo PR can already do to this repo's workflows — but "no worse
 # than the existing hole" is not a reason to add another one, and this repo's
-# own Sentinel and Viper lenses flag it.
+# own Security Review and Red Team lenses flag it.
 #
 # The offline layer keeps running on pull requests, including forks. It holds
 # no secrets, takes `contents: read`, and discards the checkout credentials, so

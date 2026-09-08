@@ -1,0 +1,16 @@
+{
+  "class": "must-block",
+  "smoke": false,
+  "pr_title": "feat(api): order lookup for the support console",
+  "guards": "Order-lookup endpoint with template-literal SQL (injection) and no ownership check (IDOR). Targeted by Security Review and the OWASP Web lens. (ported from the pre-#28 fixture corpus; PR body rewritten as a plausible description \u2014 the converted body was the fixture's own eval metadata, which described the expected lens behaviour and was correctly reported as prompt injection)",
+  "lenses": {
+    "security": {
+      "block": true,
+      "location_matches": "^src/routes/orders\\.js:"
+    },
+    "owasp_web": {
+      "block": true,
+      "location_matches": "^src/routes/orders\\.js:"
+    }
+  }
+}

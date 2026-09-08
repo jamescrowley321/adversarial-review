@@ -208,7 +208,7 @@ export function composeFromAction(lensKey, diff = actionDiffDefaults()) {
 /**
  * Eval-mode preamble. Replaces ONLY the two read tools with their results,
  * already fetched. It deliberately says nothing about severity, grounding or
- * output format — all of that must come from the shipped shared-instructions.md,
+ * output format — all of that must come from the shipped shared_instructions.md,
  * or the eval stops measuring the thing it is supposed to measure.
  *
  * The completeness claim is conditional, and that is the whole point of the

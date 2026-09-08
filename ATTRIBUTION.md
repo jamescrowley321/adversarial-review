@@ -2,7 +2,7 @@
 
 ## The method
 
-Adversarial Review is the CI-hardened form of an open-source review framework by
+Blind Peer Review is the CI-hardened form of an open-source review framework by
 James Crowley, run across several repositories. The core idea — **independent,
 fresh-context, diff-only reviewers**, because a reviewer that already saw the
 code get written is biased toward confirming its own work — is documented as the
@@ -10,8 +10,8 @@ code get written is biased toward confirming its own work — is documented as t
 
 ## Lineage of the personas
 
-The five review personas — **Blind Hunter, Edge Case Hunter, Acceptance Auditor,
-Sentinel, Viper** — grew out of two open-source projects, and credit is due to both:
+The five review personas — **Cold Read, Edge Cases, Acceptance Criteria,
+Security Review, Red Team** — grew out of two open-source projects, and credit is due to both:
 
 - **[BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD)** — the
   agile AI-driven development method whose code-review workflow (staged,

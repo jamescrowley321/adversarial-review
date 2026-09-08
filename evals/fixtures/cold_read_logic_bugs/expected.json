@@ -1,0 +1,12 @@
+{
+  "class": "must-block",
+  "smoke": true,
+  "pr_title": "Three planted core-domain defects for the Cold Read: an off-by-one lo",
+  "guards": "Three planted core-domain defects for the Cold Read: an off-by-one loop bound, an inverted validation branch, and a swallowed error that reports success. (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "cold_read": {
+      "block": true,
+      "location_matches": "^src/pagination\\.js:"
+    }
+  }
+}

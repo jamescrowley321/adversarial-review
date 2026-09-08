@@ -1,9 +1,0 @@
-{
-  "class": "must-block",
-  "smoke": true,
-  "pr_title": "fix(documents): unblock the preview iframe on download",
-  "guards": "Counterweight to the must-not-block set. A deleted tenant-ownership guard is a visible, quotable `-` line — shared-instructions.md's Grounding rules call this 'blockable, assign the real severity'. If tuning the lenses to stop false-positives ever makes this stop blocking, the gate has become decorative.",
-  "lenses": {
-    "sentinel": { "block": true, "location_matches": "^src/routes/documents\\.js:" }
-  }
-}

@@ -1,0 +1,12 @@
+{
+  "class": "must-block",
+  "smoke": true,
+  "pr_title": "refactor: extract retry helper",
+  "guards": "PR self-identifies as AI-assisted (checked box + co-author line) but names neither the harness/agent nor the model. Compliance baseline rule 1 \u2192 MUST FIX. (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "policy": {
+      "block": true,
+      "location_not_asserted": "the finding is about the PR body, which has no diff path to anchor to"
+    }
+  }
+}

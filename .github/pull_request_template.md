@@ -4,7 +4,7 @@
 
 ## Acceptance criteria
 
-<!-- Number them so the Acceptance Auditor lens can check each one. -->
+<!-- Number them so the Acceptance Criteria lens can check each one. -->
 - AC-1:
 
 ## AI provenance
@@ -21,5 +21,5 @@ this: a PR flagged AI-assisted that omits the harness or model lines fails.
 
 ## Checklist
 
-- [ ] CI is green (lint + adversarial-review gate)
+- [ ] CI is green (lint + blind-peer-review gate)
 - [ ] Docs/README updated if behavior changed

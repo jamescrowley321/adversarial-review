@@ -15,7 +15,7 @@ import { runParseStep, runGateStep, botReview, agentJsonComment, HEAD_SHA } from
 import { LENS_KEYS, lensName, personaHeading, shippedLensKeys, readPersona, readShared } from "./lib/lenses.mjs";
 import { foldReps, score, violations, THRESHOLDS } from "./lib/scorecard.mjs";
 import { extractStepScript, runNodeScript } from "./lib/action-script.mjs";
-import { composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault, listFixtureIds } from "./lib/fixtures.mjs";
+import { composeFromAction, composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault, listFixtureIds } from "./lib/fixtures.mjs";
 import { truncateDiff, truncateDiffByBytes, byteMarker, renderGetPrDiff } from "./lib/pi-diff.mjs";
 import { createSubmissionTracker, NUDGE_MESSAGE } from "../extensions/lib/submission-state.mjs";
 import { ROOT as REPO_ROOT } from "./lib/harness.mjs";
@@ -38,23 +38,24 @@ describe("lens registry", () => {
     assert.deepEqual(shippedLensKeys(), [...LENS_KEYS].sort());
   });
 
-  test("shared-instructions.md still specifies the JSON output contract", () => {
+  test("shared_instructions.md still specifies the JSON output contract", () => {
     const s = readShared();
     for (const field of ['"lens"', '"summary"', '"findings"', '"severity"', '"location"', '"detail"', '"recommendation"']) {
-      assert.ok(s.includes(field), `shared-instructions.md no longer documents ${field} — the parser expects it`);
+      assert.ok(s.includes(field), `shared_instructions.md no longer documents ${field} — the parser expects it`);
     }
   });
 });
 
 // ──────────────────── Incident 3: persona naming ────────────────────
-// lenses/sentinel.md's H1 was "Sentinel — Security Auditor Agent". The model
+// lenses/security.md (then lenses/sentinel.md) was headed "Sentinel — Security
+// Auditor Agent". The model
 // echoed `lens: "Security Auditor"`, the action's `emittedLens === lensName`
 // check rejected it, and the lens job failed DETERMINISTICALLY on every PR
 // until a fuzzy match was added. The generalized test below is the real guard:
 // it feeds each persona's own H1 back through the parser, so ANY future persona
 // rename that reintroduces the mismatch fails here, offline, before release.
 
-describe("incident 3 — lens name validation (Sentinel persona naming)", () => {
+describe("incident 3 — lens name validation (Security Review persona naming)", () => {
   for (const key of shippedLensKeys()) {
     test(`persona H1 for "${key}" validates against its job name`, async () => {
       const h1 = personaHeading(key);
@@ -63,7 +64,7 @@ describe("incident 3 — lens name validation (Sentinel persona naming)", () => 
       assert.equal(
         r.failed, null,
         `a model echoing lenses/${key}.md's own H1 ("${h1}") fails the "${lensName(key)}" job. ` +
-        `That is the Sentinel incident: every run of this lens dies before posting.`,
+        `That is the Security Review incident: every run of this lens dies before posting.`,
       );
       assert.equal(r.event, "COMMENT");
     });
@@ -74,22 +75,24 @@ describe("incident 3 — lens name validation (Sentinel persona naming)", () => 
     });
   }
 
-  // The exact string from the incident.
-  test('Sentinel job accepts lens="Security Auditor" (the observed failure)', async () => {
-    const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("Security Auditor") });
+  // The failure mode from the incident: the model answers with the persona's
+  // SUBTITLE instead of its name. The strings move when a persona is renamed
+  // (this was "Security Auditor" when the lens was "Sentinel"); the behaviour must not.
+  test('Security Review job accepts lens="Exploitable Vulnerability Agent" (its subtitle)', async () => {
+    const r = await runParseStep({ lensName: "Security Review", agentResponse: emit("Exploitable Vulnerability Agent") });
     assert.equal(r.failed, null);
-    assert.equal(r.body.split("\n")[0], "## Sentinel", "review must be headed with the JOB name, not the emitted one");
+    assert.equal(r.body.split("\n")[0], "## Security Review", "review must be headed with the JOB name, not the emitted one");
   });
 
-  test("Sentinel job accepts the historical subtitle it was renamed away from", async () => {
-    const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("Sentinel — Security Auditor Agent") });
+  test("Security Review job accepts a heading-shaped answer", async () => {
+    const r = await runParseStep({ lensName: "Security Review", agentResponse: emit("Security Review — Exploitable Vulnerability Agent") });
     assert.equal(r.failed, null);
   });
 
   // Tolerance must not become blindness: a lens must never claim another's output.
   test("a lens does NOT accept a different lens's name", async () => {
-    const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("Viper") });
-    assert.match(String(r.failed), /emitted lens="Viper"/);
+    const r = await runParseStep({ lensName: "Security Review", agentResponse: emit("Red Team") });
+    assert.match(String(r.failed), /emitted lens="Red Team"/);
     assert.equal(r.posted, false);
   });
 
@@ -104,7 +107,7 @@ describe("incident 3 — lens name validation (Sentinel persona naming)", () => 
   });
 
   // The generalization of incident 3. The observed failure was a model emitting
-  // the SUBTITLE of a persona H1 ("Security Auditor" from "Sentinel — Security
+  // the SUBTITLE of a persona H1 ("Security Auditor" from "Security Review — Security
   // Auditor Agent") rather than the primary name. The accepted names are now
   // derived from the shipped H1 itself, so a persona rename cannot reopen this.
   const subtitle = (h1) => {
@@ -120,7 +123,7 @@ describe("incident 3 — lens name validation (Sentinel persona naming)", () => 
       const r = await runParseStep({ lensName: lensName(key), agentResponse: emit(sub) });
       assert.equal(
         r.failed, null,
-        `job "${lensName(key)}" dies when the model emits "${sub}" — the same shape as the Sentinel incident`,
+        `job "${lensName(key)}" dies when the model emits "${sub}" — the same shape as the Security Review incident`,
       );
     });
   }
@@ -145,7 +148,7 @@ describe("incident 3 — lens name validation (Sentinel persona naming)", () => 
   });
 
   test("an empty lens field fails rather than defaulting to the job", async () => {
-    const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("") });
+    const r = await runParseStep({ lensName: "Security Review", agentResponse: emit("") });
     assert.notEqual(r.failed, null);
   });
 });
@@ -157,18 +160,18 @@ describe("incident 3 — lens name validation (Sentinel persona naming)", () => 
 
 describe("JSON output contract", () => {
   test("bare JSON parses", async () => {
-    assert.equal((await runParseStep({ lensName: "Sentinel", agentResponse: emit("Sentinel") })).failed, null);
+    assert.equal((await runParseStep({ lensName: "Security Review", agentResponse: emit("Security Review") })).failed, null);
   });
 
   test("```json fenced output parses", async () => {
-    const r = await runParseStep({ lensName: "Sentinel", agentResponse: "```json\n" + emit("Sentinel") + "\n```" });
+    const r = await runParseStep({ lensName: "Security Review", agentResponse: "```json\n" + emit("Security Review") + "\n```" });
     assert.equal(r.failed, null);
   });
 
   test("a prose preamble before the JSON parses", async () => {
     const r = await runParseStep({
-      lensName: "Sentinel",
-      agentResponse: "I'll fetch the diff and review it.\n\n" + emit("Sentinel", [finding()]),
+      lensName: "Security Review",
+      agentResponse: "I'll fetch the diff and review it.\n\n" + emit("Security Review", [finding()]),
     });
     assert.equal(r.failed, null);
     assert.equal(r.event, "REQUEST_CHANGES");
@@ -177,8 +180,8 @@ describe("JSON output contract", () => {
   test("nested objects in findings do not truncate the parse", async () => {
     // Regression: a lastIndexOf('}') scan ends at an inner finding's brace.
     const r = await runParseStep({
-      lensName: "Sentinel",
-      agentResponse: "prose\n" + emit("Sentinel", [finding(), finding({ location: "src/app.js:3" })]) + "\ntrailing prose",
+      lensName: "Security Review",
+      agentResponse: "prose\n" + emit("Security Review", [finding(), finding({ location: "src/app.js:3" })]) + "\ntrailing prose",
     });
     assert.equal(r.failed, null);
     assert.equal(r.comments.length, 2);
@@ -186,28 +189,28 @@ describe("JSON output contract", () => {
 
   test("a `{` inside a string value does not fool the brace walk", async () => {
     const r = await runParseStep({
-      lensName: "Sentinel",
-      agentResponse: "note\n" + emit("Sentinel", [finding({ detail: 'template `${x}` and a { brace' })]),
+      lensName: "Security Review",
+      agentResponse: "note\n" + emit("Security Review", [finding({ detail: 'template `${x}` and a { brace' })]),
     });
     assert.equal(r.failed, null);
   });
 
   test("empty agent output fails the lens", async () => {
-    const r = await runParseStep({ lensName: "Sentinel", agentResponse: "" });
+    const r = await runParseStep({ lensName: "Security Review", agentResponse: "" });
     assert.match(String(r.failed), /produced no output/);
   });
 
   test("prose-only output fails the lens", async () => {
-    const r = await runParseStep({ lensName: "Sentinel", agentResponse: "## Sentinel\n\n- [MUST FIX] `a.js:1` — nope" });
+    const r = await runParseStep({ lensName: "Security Review", agentResponse: "## Security Review\n\n- [MUST FIX] `a.js:1` — nope" });
     assert.notEqual(r.failed, null);
   });
 
   test("missing `findings` fails; `[]` is the way to say none", async () => {
-    const missing = await runParseStep({ lensName: "Sentinel", agentResponse: j({ lens: "Sentinel", summary: "s" }) });
+    const missing = await runParseStep({ lensName: "Security Review", agentResponse: j({ lens: "Security Review", summary: "s" }) });
     assert.match(String(missing.failed), /findings/);
-    const nulled = await runParseStep({ lensName: "Sentinel", agentResponse: j({ lens: "Sentinel", summary: "s", findings: null }) });
+    const nulled = await runParseStep({ lensName: "Security Review", agentResponse: j({ lens: "Security Review", summary: "s", findings: null }) });
     assert.match(String(nulled.failed), /findings/);
-    const empty = await runParseStep({ lensName: "Sentinel", agentResponse: emit("Sentinel", []) });
+    const empty = await runParseStep({ lensName: "Security Review", agentResponse: emit("Security Review", []) });
     assert.equal(empty.failed, null);
     assert.match(empty.body, /No findings\./);
   });
@@ -215,7 +218,7 @@ describe("JSON output contract", () => {
   for (const field of ["location", "detail", "recommendation"]) {
     test(`a finding with no \`${field}\` fails the lens`, async () => {
       const f = finding(); delete f[field];
-      const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("Sentinel", [f]) });
+      const r = await runParseStep({ lensName: "Security Review", agentResponse: emit("Security Review", [f]) });
       assert.notEqual(r.failed, null);
       assert.equal(r.posted, false);
     });
@@ -223,20 +226,20 @@ describe("JSON output contract", () => {
 });
 
 // ────────────────────── Severity enum discipline ──────────────────────
-// The Acceptance Auditor labels each AC PASS / FAIL / PARTIAL. Those are
+// The Acceptance Criteria labels each AC PASS / FAIL / PARTIAL. Those are
 // `detail` labels; putting one in `severity` must fail loudly rather than post
 // a review the gate cannot interpret.
 
 describe("severity enum", () => {
   for (const sev of ["MUST FIX", "SHOULD FIX", "NITPICK"]) {
     test(`"${sev}" is accepted`, async () => {
-      const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("Sentinel", [finding({ severity: sev })]) });
+      const r = await runParseStep({ lensName: "Security Review", agentResponse: emit("Security Review", [finding({ severity: sev })]) });
       assert.equal(r.failed, null);
     });
   }
   for (const sev of ["PASS", "FAIL", "PARTIAL", "SCOPE CREEP", "must fix", "BLOCKER", "critical", ""]) {
     test(`"${sev}" is rejected`, async () => {
-      const r = await runParseStep({ lensName: "Acceptance Auditor", agentResponse: emit("Acceptance Auditor", [finding({ severity: sev })]) });
+      const r = await runParseStep({ lensName: "Acceptance Criteria", agentResponse: emit("Acceptance Criteria", [finding({ severity: sev })]) });
       assert.match(String(r.failed), /severity/);
       assert.equal(r.posted, false);
     });
@@ -248,17 +251,17 @@ describe("severity enum", () => {
 
 describe("blocking contract", () => {
   test("MUST FIX ⇒ REQUEST_CHANGES ⇒ gate blocks", async () => {
-    const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("Sentinel", [finding({ severity: "MUST FIX" })]) });
+    const r = await runParseStep({ lensName: "Security Review", agentResponse: emit("Security Review", [finding({ severity: "MUST FIX" })]) });
     assert.equal(r.event, "REQUEST_CHANGES");
-    const gate = await runGateStep({ expected: ["Sentinel"], reviews: r.github.state.reviews });
+    const gate = await runGateStep({ expected: ["Security Review"], reviews: r.github.state.reviews });
     assert.equal(gate.passed, false);
   });
 
   for (const sev of ["SHOULD FIX", "NITPICK"]) {
     test(`${sev} alone ⇒ COMMENT ⇒ gate passes`, async () => {
-      const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("Sentinel", [finding({ severity: sev })]) });
+      const r = await runParseStep({ lensName: "Security Review", agentResponse: emit("Security Review", [finding({ severity: sev })]) });
       assert.equal(r.event, "COMMENT");
-      const gate = await runGateStep({ expected: ["Sentinel"], reviews: r.github.state.reviews });
+      const gate = await runGateStep({ expected: ["Security Review"], reviews: r.github.state.reviews });
       assert.equal(gate.passed, true, "a non-MUST-FIX finding must never block the merge");
     });
   }
@@ -268,16 +271,16 @@ describe("blocking contract", () => {
     // not prose. If this ever stops blocking, Grounding has become unenforceable
     // and every "cannot confirm from the diff" MUST FIX is a silent merge stop.
     const r = await runParseStep({
-      lensName: "Acceptance Auditor",
-      agentResponse: emit("Acceptance Auditor", [finding({ detail: "Cannot confirm from the diff, but this looks missing." })]),
+      lensName: "Acceptance Criteria",
+      agentResponse: emit("Acceptance Criteria", [finding({ detail: "Cannot confirm from the diff, but this looks missing." })]),
     });
     assert.equal(r.event, "REQUEST_CHANGES");
   });
 
   test("no findings at all ⇒ COMMENT ⇒ gate passes", async () => {
-    const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("Sentinel", []) });
+    const r = await runParseStep({ lensName: "Security Review", agentResponse: emit("Security Review", []) });
     assert.equal(r.event, "COMMENT");
-    assert.equal((await runGateStep({ expected: ["Sentinel"], reviews: r.github.state.reviews })).passed, true);
+    assert.equal((await runGateStep({ expected: ["Security Review"], reviews: r.github.state.reviews })).passed, true);
   });
 });
 
@@ -285,24 +288,24 @@ describe("blocking contract", () => {
 
 describe("merge gate", () => {
   test("fails closed when a lens is missing", async () => {
-    const gate = await runGateStep({ expected: ["Sentinel", "Viper"], reviews: [botReview({ lens: "Sentinel" })] });
-    assert.match(String(gate.failed), /Missing well-formed review from: Viper/);
+    const gate = await runGateStep({ expected: ["Security Review", "Red Team"], reviews: [botReview({ lens: "Security Review" })] });
+    assert.match(String(gate.failed), /Missing well-formed review from: Red Team/);
   });
 
   test("passes when every expected lens commented on the head SHA", async () => {
     const gate = await runGateStep({
-      expected: ["Sentinel", "Viper"],
-      reviews: [botReview({ lens: "Sentinel", id: 1 }), botReview({ lens: "Viper", id: 2 })],
+      expected: ["Security Review", "Red Team"],
+      reviews: [botReview({ lens: "Security Review", id: 1 }), botReview({ lens: "Red Team", id: 2 })],
     });
     assert.equal(gate.passed, true);
   });
 
   test("a stale CHANGES_REQUESTED from an earlier commit does not block", async () => {
     const gate = await runGateStep({
-      expected: ["Sentinel"],
+      expected: ["Security Review"],
       reviews: [
-        botReview({ lens: "Sentinel", id: 1, state: "CHANGES_REQUESTED", commit_id: "deadbeef" }),
-        botReview({ lens: "Sentinel", id: 2 }),
+        botReview({ lens: "Security Review", id: 1, state: "CHANGES_REQUESTED", commit_id: "deadbeef" }),
+        botReview({ lens: "Security Review", id: 2 }),
       ],
     });
     assert.equal(gate.passed, true);
@@ -310,27 +313,27 @@ describe("merge gate", () => {
 
   test("the LATEST review on the head SHA wins (re-run clears an earlier block)", async () => {
     const gate = await runGateStep({
-      expected: ["Sentinel"],
+      expected: ["Security Review"],
       reviews: [
-        botReview({ lens: "Sentinel", id: 1, state: "CHANGES_REQUESTED", submitted_at: "2026-01-01T00:00:00Z" }),
-        botReview({ lens: "Sentinel", id: 2, state: "COMMENTED", submitted_at: "2026-01-01T01:00:00Z" }),
+        botReview({ lens: "Security Review", id: 1, state: "CHANGES_REQUESTED", submitted_at: "2026-01-01T00:00:00Z" }),
+        botReview({ lens: "Security Review", id: 2, state: "COMMENTED", submitted_at: "2026-01-01T01:00:00Z" }),
       ],
     });
     assert.equal(gate.passed, true);
   });
 
   test("a human review is not counted as a lens", async () => {
-    const human = { ...botReview({ lens: "Sentinel" }), user: { login: "a-person" } };
-    const gate = await runGateStep({ expected: ["Sentinel"], reviews: [human] });
+    const human = { ...botReview({ lens: "Security Review" }), user: { login: "a-person" } };
+    const gate = await runGateStep({ expected: ["Security Review"], reviews: [human] });
     assert.match(String(gate.failed), /Missing well-formed review/);
   });
 
   test("a lens name that is a prefix of another does not claim its review", async () => {
     const gate = await runGateStep({
-      expected: ["Sentinel", "Sentinel Plus"],
-      reviews: [botReview({ lens: "Sentinel Plus", id: 1, state: "CHANGES_REQUESTED" })],
+      expected: ["Security Review", "Security Review Plus"],
+      reviews: [botReview({ lens: "Security Review Plus", id: 1, state: "CHANGES_REQUESTED" })],
     });
-    assert.match(String(gate.failed), /Missing well-formed review from: Sentinel/);
+    assert.match(String(gate.failed), /Missing well-formed review from: Security Review/);
   });
 
   test("an end-to-end pass: all shipped lenses comment, gate passes", async () => {
@@ -360,8 +363,8 @@ describe("agent-comment cleanup", () => {
 
   test("deletes this lens's own raw-JSON agent comment", async () => {
     const r = await runParseStep({
-      lensName: "Sentinel", agentResponse: ok("Sentinel"),
-      issueComments: [agentJsonComment({ lens: "Sentinel", id: 501 })],
+      lensName: "Security Review", agentResponse: ok("Security Review"),
+      issueComments: [agentJsonComment({ lens: "Security Review", id: 501 })],
     });
     assert.equal(r.failed, null);
     assert.deepEqual(r.deletedComments, [501]);
@@ -369,47 +372,47 @@ describe("agent-comment cleanup", () => {
 
   test("deletes it when the agent fenced the JSON", async () => {
     const r = await runParseStep({
-      lensName: "Sentinel", agentResponse: ok("Sentinel"),
-      issueComments: [agentJsonComment({ lens: "Sentinel", id: 502, fenced: true })],
+      lensName: "Security Review", agentResponse: ok("Security Review"),
+      issueComments: [agentJsonComment({ lens: "Security Review", id: 502, fenced: true })],
     });
     assert.deepEqual(r.deletedComments, [502]);
   });
 
   test("deletes one emitted under a persona alias", async () => {
     const r = await runParseStep({
-      lensName: "Sentinel", agentResponse: ok("Sentinel"),
-      issueComments: [agentJsonComment({ lens: "Security Auditor", id: 503 })],
+      lensName: "Security Review", agentResponse: ok("Security Review"),
+      issueComments: [agentJsonComment({ lens: "Exploitable Vulnerability Agent", id: 503 })],
     });
     assert.deepEqual(r.deletedComments, [503]);
   });
 
   test("does NOT delete another lens's comment", async () => {
     const r = await runParseStep({
-      lensName: "Sentinel", agentResponse: ok("Sentinel"),
-      issueComments: [agentJsonComment({ lens: "Viper", id: 504 })],
+      lensName: "Security Review", agentResponse: ok("Security Review"),
+      issueComments: [agentJsonComment({ lens: "Red Team", id: 504 })],
     });
     assert.deepEqual(r.deletedComments, []);
   });
 
   test("does NOT delete a human comment, even one that is pure JSON", async () => {
     const r = await runParseStep({
-      lensName: "Sentinel", agentResponse: ok("Sentinel"),
-      issueComments: [agentJsonComment({ lens: "Sentinel", id: 505, bot: false })],
+      lensName: "Security Review", agentResponse: ok("Security Review"),
+      issueComments: [agentJsonComment({ lens: "Security Review", id: 505, bot: false })],
     });
     assert.deepEqual(r.deletedComments, []);
   });
 
   test("does NOT delete bot JSON without a findings array", async () => {
     const r = await runParseStep({
-      lensName: "Sentinel", agentResponse: ok("Sentinel"),
-      issueComments: [{ id: 506, user: { login: "github-actions[bot]" }, body: '{"lens":"Sentinel","note":"not a review"}' }],
+      lensName: "Security Review", agentResponse: ok("Security Review"),
+      issueComments: [{ id: 506, user: { login: "github-actions[bot]" }, body: '{"lens":"Security Review","note":"not a review"}' }],
     });
     assert.deepEqual(r.deletedComments, []);
   });
 
   test("does NOT delete ordinary prose comments", async () => {
     const r = await runParseStep({
-      lensName: "Sentinel", agentResponse: ok("Sentinel"),
+      lensName: "Security Review", agentResponse: ok("Security Review"),
       issueComments: [
         { id: 507, user: { login: "github-actions[bot]" }, body: "Deployed to staging." },
         { id: 508, user: { login: "a-person" }, body: "Looks good to me." },
@@ -420,8 +423,8 @@ describe("agent-comment cleanup", () => {
 
   test("cleanup_agent_comments=false keeps them", async () => {
     const r = await runParseStep({
-      lensName: "Sentinel", agentResponse: ok("Sentinel"),
-      issueComments: [agentJsonComment({ lens: "Sentinel", id: 509 })],
+      lensName: "Security Review", agentResponse: ok("Security Review"),
+      issueComments: [agentJsonComment({ lens: "Security Review", id: 509 })],
       cleanupAgentComments: "false",
     });
     assert.deepEqual(r.deletedComments, []);
@@ -429,8 +432,8 @@ describe("agent-comment cleanup", () => {
 
   test("a cleanup failure never fails the lens", async () => {
     const r = await runParseStep({
-      lensName: "Sentinel", agentResponse: ok("Sentinel"),
-      issueComments: [agentJsonComment({ lens: "Sentinel" })],
+      lensName: "Security Review", agentResponse: ok("Security Review"),
+      issueComments: [agentJsonComment({ lens: "Security Review" })],
       failIssueList: true,
     });
     assert.equal(r.failed, null, "cleanup is cosmetic — it must never block a review from landing");
@@ -442,8 +445,8 @@ describe("agent-comment cleanup", () => {
     // duplicate must survive, or a failed lens would erase the only record of
     // what the agent actually said.
     const r = await runParseStep({
-      lensName: "Sentinel", agentResponse: "not json at all",
-      issueComments: [agentJsonComment({ lens: "Sentinel", id: 510 })],
+      lensName: "Security Review", agentResponse: "not json at all",
+      issueComments: [agentJsonComment({ lens: "Security Review", id: 510 })],
     });
     assert.notEqual(r.failed, null);
     assert.deepEqual(r.deletedComments, []);
@@ -491,7 +494,7 @@ describe("diff scope disclosure", () => {
 
   test("the limits disclosure precedes the persona", async () => {
     const p = await compose({ MAX_LINES: "2000" });
-    assert.ok(p.indexOf("Diff limits:") < p.indexOf("# Acceptance Auditor"));
+    assert.ok(p.indexOf("Diff limits:") < p.indexOf("# Acceptance Criteria"));
   });
 
   test("a non-integer cap is dropped, never interpolated", async () => {
@@ -528,7 +531,7 @@ describe("diff scope disclosure", () => {
 
   test("the disclosure precedes the persona, so it is in force while reviewing", async () => {
     const p = await compose({ IGNORED_PATHS: "evals/fixtures/" });
-    assert.ok(p.indexOf("Diff scope:") < p.indexOf("# Acceptance Auditor"));
+    assert.ok(p.indexOf("Diff scope:") < p.indexOf("# Acceptance Criteria"));
   });
 });
 
@@ -557,7 +560,7 @@ describe("trust boundary carve-out", () => {
 // assertion in that PR — deliberately, with the recovery visible in the diff.
 
 describe("observed live failures", () => {
-  // Seen on PR #28 (2026-09-06): Viper's job died with
+  // Seen on PR #28 (2026-09-06): Red Team's job died with
   //   agent response was not valid JSON (Bad escaped character at position 1845)
   // The model wrote a lone backslash inside `detail` — typically quoting a regex
   // or a Windows path — which is not a legal JSON escape. The action fails the
@@ -566,12 +569,12 @@ describe("observed live failures", () => {
   // lens that quotes regexes is a flake source, and the gate's fail-closed
   // "missing lens" branch turns that flake into a blocked merge.
   test("an illegal escape sequence fails the lens with an actionable message", async () => {
-    const raw = '{"lens":"Viper","summary":"s","findings":[{"severity":"MUST FIX",' +
+    const raw = '{"lens":"Red Team","summary":"s","findings":[{"severity":"MUST FIX",' +
       // `\\d` in this JS literal is one backslash + "d" in the string, which is
       // an illegal escape once it lands inside JSON — the exact shape observed.
       '"location":"src/a.js:1","detail":"the pattern \\d+ is unanchored",' +
       '"recommendation":"anchor it"}]}';
-    const r = await runParseStep({ lensName: "Viper", agentResponse: raw });
+    const r = await runParseStep({ lensName: "Red Team", agentResponse: raw });
     assert.notEqual(r.failed, null, "invalid JSON must not post a review");
     assert.equal(r.posted, false);
     assert.match(String(r.failed), /not valid JSON/);
@@ -582,10 +585,10 @@ describe("observed live failures", () => {
   // above is just asserting that JSON parsing exists.
   test("the same finding with a correctly escaped backslash parses", async () => {
     const ok = JSON.stringify({
-      lens: "Viper", summary: "s",
+      lens: "Red Team", summary: "s",
       findings: [{ severity: "MUST FIX", location: "src/a.js:1", detail: "the pattern \\d+ is unanchored", recommendation: "anchor it" }],
     });
-    const r = await runParseStep({ lensName: "Viper", agentResponse: ok });
+    const r = await runParseStep({ lensName: "Red Team", agentResponse: ok });
     assert.equal(r.failed, null);
     assert.equal(r.event, "REQUEST_CHANGES");
   });
@@ -721,7 +724,7 @@ describe("fetch-path fixtures", () => {
     // missing from every prompt the paid layer ever sent — while being present
     // in every real run, because all three inputs have defaults. Nothing failed;
     // the coverage just quietly wasn't there.
-    const prompt = await composePrompt("acceptance", loadFixture("acceptance-docs-only"));
+    const prompt = await composePrompt("acceptance", loadFixture("acceptance_docs_only"));
     assert.match(prompt, /Diff scope:/);
     assert.match(prompt, /Diff limits:/);
     const d = actionDiffDefaults();
@@ -729,11 +732,35 @@ describe("fetch-path fixtures", () => {
     assert.ok(prompt.includes(`${d.maxBytes} bytes`), "the prompt does not name the shipped byte cap");
   });
 
+  test("a lens key that is not in the registry never reaches the filesystem", async () => {
+    // The key is interpolated into a persona path, so `lens: ../action.yml` would
+    // load an arbitrary file out of the action directory and run it as the
+    // reviewer's instructions. Workflow inputs are author-controlled rather than
+    // PR-controlled, so this is depth, not a boundary — but the class is closed.
+    // These resolve to files that EXIST (README.md at the action root), so without
+    // the registry check they compose happily and the reviewer's instructions
+    // become whatever that file says. A key that merely doesn't exist would die on
+    // "Missing persona file" with or without the guard — testing that proves
+    // nothing, which is the trap this suite exists to avoid.
+    for (const bad of ["../README", "cold_read/../../README"]) {
+      await assert.rejects(() => composeFromAction(bad), `compose accepted "${bad}"`);
+    }
+  });
+
+  test("every key the registry declares still composes", async () => {
+    // The other half: a validator that rejects everything would also pass the
+    // test above.
+    for (const key of shippedLensKeys()) {
+      const prompt = await composeFromAction(key);
+      assert.ok(prompt.length > 0, `${key} composed empty`);
+    }
+  });
+
   test("a fetch-path prompt names the cap that was actually applied", async () => {
     // Production's invariant: get_pr_diff truncates at the same numbers the
     // prompt discloses. A fixture that cut at one cap while naming another
     // would be teaching the lens to distrust the disclosure.
-    const fx = loadFixture("truncation-tail-cut-must-not-block");
+    const fx = loadFixture("truncation_tail_cut_must_not_block");
     const prompt = await composePrompt("acceptance", fx);
     assert.ok(prompt.includes(`${fx.fetch.max_lines} lines`), "the prompt does not name the fixture's line cap");
     assert.ok(prompt.includes(`(truncated at ${fx.fetch.max_lines} lines,`), "the payload carries no truncation marker");
@@ -743,8 +770,8 @@ describe("fetch-path fixtures", () => {
     // Telling the lens up front that the diff was truncated would measure
     // instruction-following, not whether it notices the boundary. In production
     // the marker in the payload is the only signal, so it is the only signal here.
-    const complete = evalPreamble(loadFixture("acceptance-docs-only"));
-    const cut = evalPreamble(loadFixture("truncation-tail-cut-must-not-block"));
+    const complete = evalPreamble(loadFixture("acceptance_docs_only"));
+    const cut = evalPreamble(loadFixture("truncation_tail_cut_must_not_block"));
     assert.match(complete, /nothing was truncated/);
     // The harness must neither lie about completeness nor give the answer away.
     // (The shipped "Diff limits" paragraph does say "truncated" — that is #36's
@@ -754,7 +781,7 @@ describe("fetch-path fixtures", () => {
   });
 
   test("the fetch-path payload is the tool result, fence and header included", async () => {
-    const fx = loadFixture("truncation-head-defect-must-block");
+    const fx = loadFixture("truncation_head_defect_must_block");
     const { text, truncation } = fixtureDiffPayload(fx);
     assert.equal(truncation.reason, "bytes");
     assert.match(text, /^PR #\d+ Diff:\n```diff\n/);
@@ -762,7 +789,7 @@ describe("fetch-path fixtures", () => {
   });
 
   test("an ordinary fixture is still fed inline and untruncated", async () => {
-    const { truncation } = fixtureDiffPayload(loadFixture("acceptance-docs-only"));
+    const { truncation } = fixtureDiffPayload(loadFixture("acceptance_docs_only"));
     assert.equal(truncation, null);
   });
 });
@@ -913,19 +940,19 @@ describe("fetch fixtures cannot smuggle a fence", () => {
 // validated, and what happens when the tool did not run.
 
 describe("submit_findings channel", () => {
-  const review = (over = {}) => ({ lens: "Edge Case Hunter", summary: "s", findings: [], ...over });
+  const review = (over = {}) => ({ lens: "Edge Cases", summary: "s", findings: [], ...over });
 
   test("a submitted review is posted, and an empty final message is not a failure", async () => {
     // Once the review arrives by tool call, models often reply with nothing.
     // Treating that as "the agent produced no output" would fail every lens.
-    const r = await runParseStep({ lensName: "Edge Case Hunter", agentResponse: "", submitted: review() });
+    const r = await runParseStep({ lensName: "Edge Cases", agentResponse: "", submitted: review() });
     assert.equal(r.failed, null);
     assert.equal(r.posted, true);
     assert.equal(r.event, "COMMENT");
   });
 
   test("the message channel still works when the tool never ran", async () => {
-    const r = await runParseStep({ lensName: "Edge Case Hunter", agentResponse: emit("Edge Case Hunter") });
+    const r = await runParseStep({ lensName: "Edge Cases", agentResponse: emit("Edge Cases") });
     assert.equal(r.failed, null);
     assert.equal(r.posted, true);
   });
@@ -934,8 +961,8 @@ describe("submit_findings channel", () => {
     // The tool call is the reviewed, schema-checked artifact; a leftover message
     // is whatever the model happened to say afterwards.
     const r = await runParseStep({
-      lensName: "Edge Case Hunter",
-      agentResponse: emit("Edge Case Hunter", [finding({ detail: "from the message" })]),
+      lensName: "Edge Cases",
+      agentResponse: emit("Edge Cases", [finding({ detail: "from the message" })]),
       submitted: review({ findings: [finding({ detail: "from the tool call" })] }),
     });
     assert.match(r.body, /from the tool call/);
@@ -945,7 +972,7 @@ describe("submit_findings channel", () => {
   test("prose in the final message is irrelevant once the review was submitted", async () => {
     // The exact shape that killed three lens jobs in one day.
     const r = await runParseStep({
-      lensName: "Edge Case Hunter",
+      lensName: "Edge Cases",
       agentResponse: "I reviewed the diff and found one issue with the retry path.",
       submitted: review({ findings: [finding({ severity: "SHOULD FIX" })] }),
     });
@@ -956,22 +983,22 @@ describe("submit_findings channel", () => {
   test("a submitted review is still schema-validated, not trusted", async () => {
     // The file is written by a tool this action ships, but the parse step must
     // not become a hole that skips the checks the message path gets.
-    const wrongLens = await runParseStep({ lensName: "Edge Case Hunter", agentResponse: "", submitted: review({ lens: "Sentinel" }) });
-    assert.match(String(wrongLens.failed), /emitted lens="Sentinel"/);
+    const wrongLens = await runParseStep({ lensName: "Edge Cases", agentResponse: "", submitted: review({ lens: "Security Review" }) });
+    assert.match(String(wrongLens.failed), /emitted lens="Security Review"/);
 
     const badSeverity = await runParseStep({
-      lensName: "Edge Case Hunter", agentResponse: "",
+      lensName: "Edge Cases", agentResponse: "",
       submitted: review({ findings: [finding({ severity: "CRITICAL" })] }),
     });
     assert.match(String(badSeverity.failed), /not in \{MUST FIX, SHOULD FIX, NITPICK\}/);
 
-    const noFindings = await runParseStep({ lensName: "Edge Case Hunter", agentResponse: "", submitted: { lens: "Edge Case Hunter", summary: "s" } });
+    const noFindings = await runParseStep({ lensName: "Edge Cases", agentResponse: "", submitted: { lens: "Edge Cases", summary: "s" } });
     assert.match(String(noFindings.failed), /missing or non-array/);
   });
 
   test("a MUST FIX submitted by tool call still blocks", async () => {
     const r = await runParseStep({
-      lensName: "Edge Case Hunter", agentResponse: "",
+      lensName: "Edge Cases", agentResponse: "",
       submitted: review({ findings: [finding({ severity: "MUST FIX" })] }),
     });
     assert.equal(r.blocked, true);
@@ -981,9 +1008,9 @@ describe("submit_findings channel", () => {
   test("a corrupt findings file falls back to the message instead of failing", async () => {
     // A half-written file must cost fidelity, never the review.
     const r = await runParseStep({
-      lensName: "Edge Case Hunter",
-      agentResponse: emit("Edge Case Hunter", [finding({ detail: "recovered from the message" })]),
-      submitted: '{"lens": "Edge Case Hunter", "summary": "s", "findings": [',
+      lensName: "Edge Cases",
+      agentResponse: emit("Edge Cases", [finding({ detail: "recovered from the message" })]),
+      submitted: '{"lens": "Edge Cases", "summary": "s", "findings": [',
     });
     assert.equal(r.failed, null);
     assert.match(r.body, /recovered from the message/);
@@ -991,7 +1018,7 @@ describe("submit_findings channel", () => {
   });
 
   test("no tool, no message is still a hard failure", async () => {
-    const r = await runParseStep({ lensName: "Edge Case Hunter", agentResponse: "" });
+    const r = await runParseStep({ lensName: "Edge Cases", agentResponse: "" });
     assert.match(String(r.failed), /agent produced no output/);
   });
 });

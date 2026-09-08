@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-// Adversarial Review — local mode (Node, no shell).
+// Blind Peer Review — local mode (Node, no shell).
 //
 // Runs the review personas against your working branch BEFORE you push, using
 // the pi CLI. Each lens reads the branch diff and writes its findings to
-// .adversarial-review/<lens>.md. Language-agnostic.
+// .blind-peer-review/out/<lens>.json. A repo can override any persona by committing
+// .blind-peer-review/lenses/<lens>.md (trusted local tuning). Language-agnostic.
 //
 // Usage:
 //   node scripts/run-local.mjs                     # adversarial lenses vs origin/main
 //   node scripts/run-local.mjs --base main
-//   node scripts/run-local.mjs --lens sentinel,viper
+//   node scripts/run-local.mjs --lens security,red_team
 //   PI_BIN=pi MODEL=z-ai/glm-5.2 node scripts/run-local.mjs
 //
 // Requires: git, the `pi` CLI on PATH, and a provider key in OPENROUTER_API_KEY.
@@ -21,18 +22,31 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LENS_DIR = join(ROOT, "lenses");
-const OUT = ".adversarial-review";
+const CONTRACT = join(ROOT, "contracts", "shared_review_contract.md");
+const OUT = ".blind-peer-review/out";              // ephemeral: diff + per-lens findings
+const OVERRIDE_DIR = ".blind-peer-review/lenses";  // committed: per-repo persona overrides
 
-// Local mode reviews code; the Compliance lens is a PR-time policy check, so it
-// is not part of the default local set (add it explicitly with --lens if wanted).
-const NAMES = {
-  blind: "Blind Hunter",
-  "edge-case": "Edge Case Hunter",
-  acceptance: "Acceptance Auditor",
-  sentinel: "Sentinel",
-  viper: "Viper",
-  compliance: "Compliance",
-};
+// The lens registry is the shared, harness-neutral manifest — one source of truth.
+// (Local mode reviews code; Compliance is a PR-time policy check, so it is not in
+// the default local set — add it explicitly with --lens if wanted.)
+let manifest;
+try {
+  manifest = JSON.parse(readFileSync(join(LENS_DIR, "manifest.json"), "utf8"));
+} catch (e) {
+  console.error(`error: could not read the lens registry at ${join(LENS_DIR, "manifest.json")} — ${e.message}`);
+  process.exit(1);
+}
+let contractText;
+try {
+  contractText = readFileSync(CONTRACT, "utf8");
+} catch (e) {
+  // Without the contract a lens has no trust boundary and no output envelope.
+  // Reviewing anyway would produce unparseable findings from an unguarded lens,
+  // so stop rather than degrade quietly.
+  console.error(`error: could not read the review contract at ${CONTRACT} — ${e.message}`);
+  process.exit(1);
+}
+const NAMES = Object.fromEntries(manifest.lenses.map((l) => [l.key, l.name]));
 
 function printHelp() {
   console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n")
@@ -40,7 +54,7 @@ function printHelp() {
 }
 
 let base = "origin/main";
-let lenses = ["blind", "edge-case", "acceptance", "sentinel", "viper"];
+let lenses = ["cold_read", "edge_case", "acceptance", "security", "red_team"];
 let PI_BIN = process.env.PI_BIN || "pi";
 let PROVIDER = process.env.PROVIDER || "openrouter";
 let MODEL = process.env.MODEL || "z-ai/glm-5.2";
@@ -49,7 +63,17 @@ let THINKING = process.env.THINKING || "medium";
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === "--base") base = argv[++i];
+  if (a === "--base") {
+    base = argv[++i];
+    // Not shell injection — the diff goes through execFileSync with an argument
+    // array, so there is no shell to inject into. This stops a ref that begins
+    // with "-" from being read by git as an option instead of a revision.
+    if (base === undefined) { console.error("error: --base requires a value"); process.exit(1); }
+    if (!/^[A-Za-z0-9_./~^-]+$/.test(base) || base.startsWith("-")) {
+      console.error(`error: '${base}' is not a valid git ref for --base`);
+      process.exit(1);
+    }
+  }
   else if (a === "--lens") lenses = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
   else if (a === "--model") MODEL = argv[++i];
   else if (a === "--provider") PROVIDER = argv[++i];
@@ -71,13 +95,24 @@ writeFileSync(patch, diff);
 if (!diff.trim()) { console.log(`No changes vs ${base} — nothing to review.`); process.exit(0); }
 console.log(`Diff: ${diff.split("\n").length} lines vs ${base}`);
 
+const verdicts = [];
+
 for (const key of lenses) {
+  // Registry membership is also the path guard: `key` is about to be joined into
+  // a filename, and only keys the manifest declares get that far, so a traversal
+  // sequence never reaches the filesystem.
   const name = NAMES[key];
-  if (!name) { console.log(`skip: unknown lens '${key}'`); continue; }
-  const personaPath = join(LENS_DIR, `${key}.md`);
+  if (!name) { console.log(`skip: unknown lens '${key}' (not in lenses/manifest.json)`); continue; }
+  // A committed local override wins over the base persona (trusted, static tuning).
+  const overridePath = join(OVERRIDE_DIR, `${key}.md`);
+  const personaPath = existsSync(overridePath) ? overridePath : join(LENS_DIR, `${key}.md`);
   if (!existsSync(personaPath)) { console.log(`skip: missing ${personaPath}`); continue; }
+  if (personaPath === overridePath) console.log(`  (local override: ${overridePath})`);
 
   const persona = readFileSync(personaPath, "utf8").split("__PR_NUMBER__").join("N/A (local review)");
+  // The shared contract carries the trust boundary, the severity terms and the
+  // output envelope. Local runs used to inline their own envelope and skip the
+  // rest, which left a local review with no injection defence at all.
   const prompt = [
     "LOCAL MODE: There is no pull request. The full diff to review is in the file",
     `\`${patch}\` (a \`git diff\`). Read that file instead of calling any GitHub tool.`,
@@ -85,24 +120,60 @@ for (const key of lenses) {
     "",
     persona,
     "",
-    "## Output (local)",
-    `Print your findings to stdout as a markdown section beginning with \`## ${name}\`,`,
-    "using the severity terms MUST FIX / SHOULD FIX / NITPICK and `file:line` references.",
-    'If no findings, write "No findings."',
+    contractText,
+    "",
+    "There is no submission tool here: print the contract's JSON object to stdout as",
+    "your entire output — no prose, no markdown fences.",
   ].join("\n");
 
   console.log(`── ${name} ──`);
   const res = spawnSync(PI_BIN, ["--provider", PROVIDER, "--model", MODEL, "--thinking", THINKING], {
     input: prompt, encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
   });
-  if (res.error) { console.log(`  ! could not run ${PI_BIN}: ${res.error.message}`); continue; }
-  writeFileSync(join(OUT, `${key}.md`), res.stdout || "");
-  if (res.status === 0) {
-    console.log(`  → ${join(OUT, `${key}.md`)}`);
-  } else {
+  if (res.error) {
+    console.log(`  ! could not run ${PI_BIN}: ${res.error.message}`);
+    verdicts.push({ key, name, state: "FAILED", must: 0, note: `could not run ${PI_BIN}` });
+    continue;
+  }
+  const out = res.stdout || "";
+  writeFileSync(join(OUT, `${key}.json`), out);
+  if (res.status !== 0) {
     writeFileSync(join(OUT, `${key}.err`), res.stderr || "");
     console.log(`  ! exit ${res.status} (see ${join(OUT, `${key}.err`)})`);
+    verdicts.push({ key, name, state: "FAILED", must: 0, note: `exit ${res.status}` });
+    continue;
   }
+  // Adjudicate on the parsed severity, never on the text. A lens that writes
+  // "no MUST FIX findings" is a pass, and substring matching would block it.
+  let parsed = null;
+  try { parsed = JSON.parse(out.trim()); } catch { /* handled below */ }
+  if (!parsed || !Array.isArray(parsed.findings)) {
+    console.log(`  ! ${join(OUT, `${key}.json`)} is not the contract object — lens FAILED`);
+    verdicts.push({ key, name, state: "FAILED", must: 0, note: "output is not the contract object" });
+    continue;
+  }
+  const must = parsed.findings.filter((f) => f && f.severity === "MUST FIX").length;
+  verdicts.push({ key, name, state: must ? "BLOCK" : "PASS", must, findings: parsed.findings });
+  console.log(`  → ${join(OUT, `${key}.json`)} (${must} MUST FIX)`);
 }
 
 console.log(`\nDone. Findings in ${OUT}/. Review MUST FIX items before pushing.`);
+
+// Fail closed: a MUST FIX blocks, and so does a lens whose review could not be
+// read. A review nobody could parse has not passed.
+console.log("\n── verdict ──");
+for (const v of verdicts) {
+  const detail = v.state === "FAILED" ? ` (${v.note})` : ` (${v.must} MUST FIX)`;
+  console.log(`  ${v.state.padEnd(6)} ${v.name}${detail}`);
+}
+const blocked = verdicts.filter((v) => v.state !== "PASS");
+if (blocked.length) {
+  for (const v of verdicts) {
+    for (const f of (v.findings || []).filter((f) => f.severity === "MUST FIX")) {
+      console.log(`\n  [${v.name}] ${f.location}\n    ${f.detail}`);
+    }
+  }
+  console.log(`\nBLOCK — ${blocked.length} lens(es) blocked or failed.`);
+  process.exit(1);
+}
+console.log("\nPASS — no MUST FIX findings.");

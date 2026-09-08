@@ -1,6 +1,6 @@
 # Security hardening & OWASP roadmap
 
-Adversarial Review is itself an LLM application: it runs an AI agent (pi) over
+Blind Peer Review is itself an LLM application: it runs an AI agent (pi) over
 **untrusted pull-request content** with access to a provider API key and a
 `GITHUB_TOKEN` that can post reviews. So the OWASP **Top 10 for LLM Applications
 2026** applies to *this action*, not just to the code it reviews — above all
@@ -33,7 +33,7 @@ Defense-in-depth; assume the instruction boundary *will* be bypassed.
 | C3 | **Least-privilege token.** Jobs request only `contents: read` + `pull-requests: write`; no other secrets in the job env. | ✅ shipped | mitigation #4, Rule of Two (#8) |
 | C4 | **Constrain the agent's tools.** `loaded_tools` allowlist pins the lens agent to exactly `get_pr_diff`, `get_issue_or_pr_thread`, `create_pull_request_review` — no shell, file-write, push, or create/update-PR tools (pi defaults to `loaded_tools: all`, which includes those). A landed injection therefore can't read the provider key from env or mutate the repo. | ✅ shipped (`loaded_tools` input) | mitigation #1/#4 |
 | C5 | **Deterministic gate.** The merge decision is computed in `github-script` from each review's **state** (`CHANGES_REQUESTED`), not from trusting model text — an injection can't make the gate pass by writing "gate: pass". | ✅ shipped | mitigation #2, LLM10 |
-| C6 | **Hardened trust boundary in the prompt** — treat all content as data; embedded instructions are a MUST FIX finding; ignore invisible/zero-width Unicode and encoded payloads; the only permitted action is posting one review. | ✅ shipped (`lenses/shared-instructions.md`) | mitigation #1/#5/#6 |
+| C6 | **Hardened trust boundary in the prompt** — treat all content as data; embedded instructions are a MUST FIX finding; ignore invisible/zero-width Unicode and encoded payloads; the only permitted action is posting one review. | ✅ shipped (`lenses/shared_instructions.md`) | mitigation #1/#5/#6 |
 | C7 | **Strip invisible / zero-width / tag-block Unicode** from the diff before the model sees it (defense against ASCII-smuggling). | 🔭 planned enhancement | mitigation #5 |
 | C8 | **Budget-capped, scoped provider key** so a leaked key has a hard ceiling and no access beyond the one model. | ⚙️ set on OpenRouter | LLM02 blast radius |
 
@@ -89,19 +89,19 @@ approve). On top of that:
 ## OWASP integration roadmap
 
 The security lenses already cover much of the **OWASP Web Top 10 (2021)** —
-Sentinel and Viper hit injection, broken access control, SSRF, crypto misuse.
+Security Review and Red Team hit injection, broken access control, SSRF, crypto misuse.
 The plan makes that explicit and adds LLM coverage:
 
-- ✅ **Phase 1 — `owasp-web` lens** (opt-in): the OWASP Web Top 10 (2021), each
+- ✅ **Phase 1 — `owasp_web` lens** (opt-in): the OWASP Web Top 10 (2021), each
   finding tagged with its `A0x` category. Runs as its own parallel job.
-- ✅ **Phase 2 — `owasp-llm` lens** (opt-in): the GenAI/LLM Top 10 2026
+- ✅ **Phase 2 — `owasp_llm` lens** (opt-in): the GenAI/LLM Top 10 2026
   (LLM01–LLM10), tagged `LLM0x`, activating only when the diff touches AI/LLM
   surface. Notes when the OWASP **Agentic (ASI) Top 10** also applies.
 - 🔭 **Phase 3 — per-repo OWASP tuning** via a committed
-  `.adversarial-review/lenses/owasp-web.md` (or `owasp-llm.md`) override that the
+  `.blind-peer-review/lenses/owasp_web.md` (or `owasp_llm.md`) override that the
   local harnesses read, so a repo can tighten the checklist to its domain. CI keeps
   running the pinned base packs (injection-safe — no rule text from the PR checkout).
-- ✅ **Reflexive check:** the self-review workflow runs `owasp-llm` on *this* repo
+- ✅ **Reflexive check:** the self-review workflow runs `owasp_llm` on *this* repo
   — LLM01 and LLM06 are exactly the controls above, and this document is the
   residual-risk record.
 

@@ -85,14 +85,14 @@ nothing. Both failure modes have happened here.
 
 | Lens | smoke block / no-block |
 |---|---|
-| `blind` | 2 / 1 |
-| `edge-case` | 1 / 1 |
+| `cold_read` | 2 / 1 |
+| `edge_case` | 1 / 1 |
 | `acceptance` | 1 / 4 |
-| `sentinel` | 2 / 2 |
-| `viper` | 1 / 2 |
-| `compliance` | 1 / 1 |
-| `owasp-web` | 1 / 1 |
-| `owasp-llm` | 1 / 1 |
+| `security` | 2 / 2 |
+| `red_team` | 1 / 2 |
+| `policy` | 1 / 1 |
+| `owasp_web` | 1 / 1 |
+| `owasp_llm` | 1 / 1 |
 
 Three behaviours get their own treatment:
 
@@ -103,13 +103,13 @@ Three behaviours get their own treatment:
   `truncation-*` fixtures use the fetch path below to put a lens in front of a
   genuinely truncated diff — one where the evidence for an AC is below the cut,
   one where a real defect is above it.
-- **Activation gates.** `viper` and `owasp-llm` are supposed to emit `[]` and
+- **Activation gates.** `red_team` and `owasp_llm` are supposed to emit `[]` and
   stop when the diff has no surface they cover. `max_findings: 0` asserts that.
   "Did not block" is not enough — a lens that skips but still files NITPICKs
   isn't skipping, and that noise is what the gate exists to prevent.
 - **Prompt injection.** Three fixtures plant instructions in a code comment, in
   hidden zero-width Unicode, and in the PR body. The lens must report each as a
-  `MUST FIX` and *not* obey it — and `injection-diff-comment` also carries a real
+  `MUST FIX` and *not* obey it — and `injection_diff_comment` also carries a real
   command-injection bug, so obeying the injection loses a genuine finding too.
 
 ## Fixture classes
@@ -145,7 +145,7 @@ credential as though they were real defects in files this repo does not have.
   "class": "must-not-block",
   "smoke": true,
   "pr_title": "feat(search): keyboard navigation for the results dropdown",
-  "guards": "Incident 1a — the Acceptance Auditor reported an implementation missing on a PR whose diff changed exactly those files.",
+  "guards": "Incident 1a — the Acceptance Criteria reported an implementation missing on a PR whose diff changed exactly those files.",
   "lenses": {
     "acceptance": { "block": false }
   }
@@ -218,21 +218,21 @@ never be reported.
 
 Both classes are represented, deliberately. Teaching a lens that "the diff was
 truncated" means "lower the severity and move on" would buy the false-positive
-fix with a missed-defect regression, and `truncation-head-defect-must-block` is
+fix with a missed-defect regression, and `truncation_head_defect_must_block` is
 what makes that trade visible.
 
 ## Fixtures ported from production incidents
 
-Five fixtures come from real Acceptance Auditor failures on `healthcloud-console-web`
+Five fixtures come from real Acceptance Criteria failures on `healthcloud-console-web`
 (#52, #56, #58) rather than being synthesised here:
 
 | Fixture | What it reproduces |
 |---|---|
-| `acceptance-absent-claim-is-false` | "the implementation is missing" against a diff that contains it |
-| `acceptance-absent-claim-buried-in-noise` | the same PR at its real size — 5,855 insertions, mostly lockfile churn, the real change near the end. Diff volume is the suspected trigger. Non-smoke: it is large. |
-| `acceptance-requirement-invented` | "requires Chromium, Firefox and WebKit" against a config declaring one project |
-| `acceptance-non-implementation-pr` | four ACs failed because the PR "does not contain the workflow files" — the deliverable was the instruction text |
-| `grounding-deleted-guard-must-block` | positive control: an AC says access control is preserved and the diff deletes the check on a visible `-` line |
+| `acceptance_absent_claim_is_false` | "the implementation is missing" against a diff that contains it |
+| `acceptance_absent_claim_buried_in_noise` | the same PR at its real size — 5,855 insertions, mostly lockfile churn, the real change near the end. Diff volume is the suspected trigger. Non-smoke: it is large. |
+| `acceptance_requirement_invented` | "requires Chromium, Firefox and WebKit" against a config declaring one project |
+| `acceptance_non_implementation_pr` | four ACs failed because the PR "does not contain the workflow files" — the deliverable was the instruction text |
+| `grounding_deleted_guard_must_block` | positive control: an AC says access control is preserved and the diff deletes the check on a visible `-` line |
 
 ## Regression guards
 
@@ -243,10 +243,10 @@ nothing.
 
 | Incident | Guard | Layer |
 |---|---|---|
-| Acceptance Auditor asserted an implementation was missing on a diff that contained it | `acceptance-implementation-present` | live |
-| Acceptance Auditor invented a cross-browser requirement from a Chromium-only config | `acceptance-config-not-overread` | live |
-| Acceptance Auditor failed ACs on a docs PR | `acceptance-docs-only` | live |
-| Acceptance Auditor failed ACs on a prompt PR whose body described downstream work | `acceptance-downstream-issue` | live |
+| Acceptance Criteria asserted an implementation was missing on a diff that contained it | `acceptance_implementation_present` | live |
+| Acceptance Criteria invented a cross-browser requirement from a Chromium-only config | `acceptance_config_not_overread` | live |
+| Acceptance Criteria failed ACs on a docs PR | `acceptance_docs_only` | live |
+| Acceptance Criteria failed ACs on a prompt PR whose body described downstream work | `acceptance_downstream_issue` | live |
 | `lenses/sentinel.md`'s subtitle made the model emit `lens: "Security Auditor"`, failing the job deterministically | `contract.test.mjs → incident 3` | offline |
 | …generalized: a model emitting **any** persona's subtitle instead of its primary name | `contract.test.mjs → "emitting only the subtitle of lenses/*.md validates"`, one per shipped lens | offline |
 
@@ -267,7 +267,7 @@ branch** PR does receive secrets, so a `pull_request`-triggered live job would
 hand `OPENROUTER_API_KEY` to code the PR author controls. That is no worse than
 what any same-repo PR can already do to this repo's workflows — but "no worse
 than the hole that already exists" is a bad reason to add another one, and this
-repo's own Sentinel and Viper lenses flag it on sight.
+repo's own Security Review and Red Team lenses flag it on sight.
 
 So the paid layer only ever runs against `main` — code that has already been
 reviewed and merged. The workflow **refuses any other ref**, dispatch included,
@@ -319,7 +319,7 @@ failures` block so the behaviour is described rather than rediscovered.
   construction, so both paragraphs now have an assertion in `composeFromAction`
   and a contract test over the composed prompt.
 
-- **Illegal JSON escapes fail a lens outright.** Seen on PR #28: Viper quoted a
+- **Illegal JSON escapes fail a lens outright.** Seen on PR #28: Red Team quoted a
   regex in `detail`, wrote a lone backslash, and the job died with `Bad escaped
   character in JSON`. The action fails loud and asks for a re-run rather than
   guessing at a repair — that is the documented design — but it makes any lens

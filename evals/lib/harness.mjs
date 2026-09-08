@@ -223,7 +223,7 @@ export function headingForDisplayName(displayName) {
   const m = yml.match(/const NAMES = \{([\s\S]*?)\n\s*\};/);
   if (!m) return "";
   for (const line of m[1].split("\n")) {
-    const kv = line.match(/^\s*"?([a-z0-9-]+)"?:\s*"([^"]+)",?\s*$/);
+    const kv = line.match(/^\s*"?([a-z0-9_-]+)"?:\s*"([^"]+)",?\s*$/);
     if (kv && kv[2] === displayName) {
       try {
         const txt = readFileSync(join(ROOT, "lenses", `${kv[1]}.md`), "utf8");

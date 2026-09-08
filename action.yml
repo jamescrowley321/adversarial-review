@@ -1,4 +1,4 @@
-# Adversarial Review — a fresh-context, diff-only AI review gate.
+# Blind Peer Review — a fresh-context, diff-only AI review gate.
 #
 # One composite action, two modes:
 #   mode: lens  — run ONE adversarial persona as a fresh agent session. The
@@ -16,7 +16,7 @@
 # Engine: the pi coding agent (pi.dev) via shaftoe/pi-coding-agent-action,
 # routed through OpenRouter; default model google/gemini-2.5-pro (strong JSON adherence, stable slug). All overridable.
 
-name: 'Adversarial Review'
+name: 'Blind Peer Review'
 description: 'Fresh-context, diff-only adversarial PR review — five skeptical AI lenses that fail the merge on real defects.'
 author: 'James Crowley'
 
@@ -29,13 +29,13 @@ inputs:
     description: "'lens' to run a single review persona, or 'gate' to aggregate and adjudicate."
     required: true
   lens:
-    description: "Which persona to run when mode=lens: blind | edge-case | acceptance | sentinel | viper."
+    description: "Which persona to run when mode=lens: cold_read | edge_case | acceptance | security | red_team."
     required: false
     default: ''
   lenses:
     description: "Comma-separated lens keys the gate should expect (mode=gate). Must match the caller matrix."
     required: false
-    default: 'blind,edge-case,acceptance,sentinel,viper'
+    default: 'cold_read,edge_case,acceptance,security,red_team'
   api_key:
     description: "Provider API key (e.g. OpenRouter). Required for mode=lens. Pass from a secret."
     required: false
@@ -137,14 +137,14 @@ runs:
         const die = (m) => { console.log(`::error::${m}`); process.exit(1); };
 
         const NAMES = {
-          blind: "Blind Hunter",
-          "edge-case": "Edge Case Hunter",
-          acceptance: "Acceptance Auditor",
-          sentinel: "Sentinel",
-          viper: "Viper",
-          compliance: "Compliance Auditor",
-          "owasp-web": "OWASP Web Top 10",
-          "owasp-llm": "OWASP LLM Top 10",
+          "cold_read": "Cold Read",
+          "edge_case": "Edge Cases",
+          acceptance: "Acceptance Criteria",
+          security: "Security Review",
+          "red_team": "Red Team",
+          policy: "Policy & Provenance",
+          "owasp_web": "OWASP Web Top 10",
+          "owasp_llm": "OWASP LLM Top 10",
         };
 
         const pr = (process.env.IN_PR || "").trim() || (process.env.EVENT_PR || "").trim();
@@ -195,10 +195,29 @@ runs:
 
         const actionPath = process.env.ACTION_PATH;
         const lensKey = process.env.LENS_KEY;
+        // The key becomes a file path, so it is checked against the registry before
+        // it is joined to one. `lens: ../action.yml` would otherwise load an
+        // arbitrary file out of the action directory as the persona — swapping the
+        // reviewer for something that is not a reviewer. Workflow inputs are
+        // author-controlled, not PR-controlled, so this is defence in depth rather
+        // than a boundary; it costs one read and removes the class.
+        const registry = path.join(actionPath, "lenses", "manifest.json");
+        let known;
+        try {
+          known = JSON.parse(fs.readFileSync(registry, "utf8")).lenses.map((l) => l.key);
+        } catch (e) {
+          // The registry ships with the action, so this means a corrupt checkout
+          // rather than a caller mistake — but an unhandled parse throw buries that
+          // under a stack trace in a log nobody reads to the end.
+          die(`Could not read the lens registry at ${registry}: ${e.message}`);
+        }
+        if (!/^[a-z0-9_]+$/.test(lensKey) || !known.includes(lensKey)) {
+          die(`Unknown lens "${lensKey}". Known lenses: ${known.join(", ")}.`);
+        }
         const personaPath = path.join(actionPath, "lenses", `${lensKey}.md`);
-        const sharedPath = path.join(actionPath, "lenses", "shared-instructions.md");
+        const sharedPath = path.join(actionPath, "lenses", "shared_instructions.md");
         if (!fs.existsSync(personaPath)) die(`Missing persona file ${personaPath}`);
-        if (!fs.existsSync(sharedPath)) die("Missing shared-instructions.md");
+        if (!fs.existsSync(sharedPath)) die("Missing shared_instructions.md");
 
         // Hand the agent the exact repo + PR from trusted GitHub Actions context
         // (never from PR content), so get_pr_diff / get_issue_or_pr_thread resolve
@@ -354,7 +373,7 @@ runs:
 
         // Publish the persona's H1 for the parse step. Models routinely echo the
         // heading, or just its subtitle, instead of the primary lens name — that
-        // is what killed every Sentinel job when the heading read "Sentinel —
+        // is what killed every Security Review job when the heading read "Security Review —
         // Security Auditor Agent" and the model emitted "Security Auditor".
         // Deriving the accepted names from the shipped heading fixes the whole
         // class; a hand-maintained alias map only ever covers the strings someone
@@ -549,33 +568,38 @@ runs:
 
           // ── 2. Validate the schema. ──
           // Lens name: accept case-insensitive match OR one containing the other,
-          // so a persona that calls itself "Compliance Auditor" validates against
-          // a lens keyed "compliance" (display "Compliance"). Exact match is the
+          // so a persona that calls itself "Policy & Provenance" validates against
+          // a lens keyed "policy" (display "Compliance"). Exact match is the
           // common case; the fuzzy check is defensive against persona naming drift.
           const emittedLens = String(parsed.lens || "").trim();
           const norm = (s) => s.toLowerCase();
-          // Accept documented persona subtitles as explicit aliases. Sentinel's
-          // heading is "Sentinel — Security Auditor Agent", and some models emit
-          // the subtitle despite being instructed to emit the primary name.
+          // Accept documented persona subtitles as explicit aliases: some models emit
+          // the subtitle despite being instructed to emit the primary name. This is
+          // what killed every Security Review job when its heading still read
+          // "Sentinel — Security Auditor Agent" and models answered "Security Auditor".
           const aliases = {
-            "blind hunter — adversarial code review agent": "blind hunter",
-            "edge case hunter — exhaustive path analysis agent": "edge case hunter",
-            "acceptance auditor — spec compliance review agent": "acceptance auditor",
-            "sentinel — security auditor agent": "sentinel",
-            "security auditor": "sentinel",
-            "viper — red team review agent": "viper",
-            "compliance auditor — policy & provenance review agent": "compliance auditor",
-            compliance: "compliance auditor",
+            "cold read — zero-context adversarial agent": "cold read",
+            "edge cases — exhaustive path analysis agent": "edge cases",
+            "acceptance criteria — spec conformance agent": "acceptance criteria",
+            "security review — exploitable vulnerability agent": "security review",
+            "red team — offensive attack-chain agent": "red team",
+            "policy & provenance — contribution governance agent": "policy & provenance",
+            "zero-context adversarial agent": "cold read",
+            "exhaustive path analysis agent": "edge cases",
+            "spec conformance agent": "acceptance criteria",
+            "exploitable vulnerability agent": "security review",
+            "offensive attack-chain agent": "red team",
+            "contribution governance agent": "policy & provenance",
             "owasp web top 10 — application security lens": "owasp web top 10",
             "owasp genai/llm top 10 — ai application security lens": "owasp llm top 10",
           };
           const expectedNorm = norm(lensName);
           // Tolerant match (the explicit `aliases` map above only catches subtitles
-          // seen verbatim before — e.g. Gemini emits "Sentinel — Security Review
+          // seen verbatim before — e.g. Gemini emits "Security Review — Security Review
           // Agent", which no map entry covers). Accept when the emitted name's
           // primary segment (before any —/–/-/:/| subtitle) equals the expected
           // name, or when either name contains the other. The lens keys are
-          // distinct enough (blind/edge-case/acceptance/sentinel/viper/compliance/
+          // distinct enough (cold_read/edge_case/acceptance/security/red_team/policy/
           // owasp-*) that containment cannot cross-match one persona to another.
           //
           // Named, because step 8 below reuses it to identify THIS lens's stray
@@ -711,8 +735,8 @@ runs:
           const isBot = (r) => r.user && (r.user.login === "github-actions[bot]" || r.user.login === "github-actions");
           const header = `## ${lensName}`;
           // Exact first-line match, NOT a prefix: a bare startsWith would let a
-          // lens whose name is a textual prefix of another (e.g. "Sentinel" vs
-          // "Sentinel Plus") claim — and dismiss/collapse — the other lens's
+          // lens whose name is a textual prefix of another (e.g. "Security Review" vs
+          // "Security Review Plus") claim — and dismiss/collapse — the other lens's
           // reviews and comments. Reachable through ordinary lens-name config,
           // no attacker required.
           const ownsReview = (r) => (r.body || "").split("\n")[0].trim() === header;
@@ -902,8 +926,8 @@ runs:
             r.user && (r.user.login === "github-actions[bot]" || r.user.login === "github-actions");
           // Match the EXACT "## <Lens>" header line (an empty/"null" body matches
           // nothing). Exact, not a prefix: a bare startsWith would mis-attribute a
-          // review whose lens name is a prefix of another's (e.g. "Sentinel" vs
-          // "Sentinel Plus") — same fix as the post step's `ownsReview`.
+          // review whose lens name is a prefix of another's (e.g. "Security Review" vs
+          // "Security Review Plus") — same fix as the post step's `ownsReview`.
           const lensOf = (r) => {
             const first = (r.body || "").trim().split("\n")[0].trim();
             return EXPECTED.find((l) => first === `## ${l}`) || null;

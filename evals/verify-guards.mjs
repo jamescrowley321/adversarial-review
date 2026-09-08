@@ -21,14 +21,22 @@ const at = (ref, path) => execFileSync("git", ["show", `${ref}:${path}`], { cwd:
 
 const GUARDS = [
   {
-    id: "incident-3/sentinel-subtitle",
+    id: "incident-3/subtitle-echo",
     incident:
       'lenses/sentinel.md was headed "# Sentinel — Security Auditor Agent"; the model emitted ' +
-      'lens: "Security Auditor"; action.yml rejected it and the Sentinel job failed on every PR.',
+      'lens: "Security Auditor"; action.yml rejected it and the Sentinel job failed on every PR. ' +
+      "That lens is now Security Review — the strings below differ by era, the behaviour does not.",
     prefixRef: "de5a7f0",
-    guardedBy: 'contract.test.mjs → "Sentinel job accepts lens=\\"Security Auditor\\""',
+    guardedBy: 'contract.test.mjs → "Security Review job accepts lens=\\"Exploitable Vulnerability Agent\\""',
     async probe(yml) {
-      const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("Security Auditor"), yml });
+      // Era-specific strings. The pre-fix action.yml knows only the old persona and
+      // HEAD only the new one, so no single pair can probe both. What is under test
+      // is identical either way: a model answering with the persona's SUBTITLE
+      // instead of its name must still be accepted.
+      const [lens, subtitle] = yml
+        ? ["Sentinel", "Security Auditor"]
+        : ["Security Review", "Exploitable Vulnerability Agent"];
+      const r = await runParseStep({ lensName: lens, agentResponse: emit(subtitle), yml });
       return { tripped: r.failed != null, detail: r.failed ?? `posted ${r.event}` };
     },
   },
@@ -38,7 +46,7 @@ const GUARDS = [
     prefixRef: null, // no known-broken commit; asserted at HEAD only
     guardedBy: 'contract.test.mjs → "a lens does NOT accept a different lens\'s name"',
     async probe(yml) {
-      const r = await runParseStep({ lensName: "Sentinel", agentResponse: emit("Viper"), yml });
+      const r = await runParseStep({ lensName: "Security Review", agentResponse: emit("Red Team"), yml });
       return { tripped: r.failed != null, detail: r.failed ?? `posted ${r.event}` };
     },
     expectAtHead: true, // this one SHOULD trip at HEAD — it is a rejection guard
