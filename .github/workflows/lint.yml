@@ -58,7 +58,24 @@ jobs:
           // A templated expression in an input DESCRIPTION is evaluated at action-load time;
           // referencing `secrets` there makes composite actions fail to load
           // ("Unrecognized named-value: 'secrets'"). Ban templates in descriptions.
-          const badDesc = action.split("\n").filter((l) => /^\s*description:/.test(l) && /\$\{\{/.test(l));
+          // Whole description BLOCKS, not just the `description:` line. A
+          // templated expression anywhere inside one is evaluated at action-load
+          // time and the action fails to load — which is exactly what happened
+          // when an example `${{ needs... }}` was written on the second line of a
+          // `description: |` block, where the old single-line check could not see it.
+          const lines = action.split("\n");
+          const badDesc = [];
+          for (let i = 0; i < lines.length; i++) {
+            const m = lines[i].match(/^(\s*)description:(.*)$/);
+            if (!m) continue;
+            const [, indent, rest] = m;
+            if (/\$\{\{/.test(rest)) { badDesc.push(lines[i]); continue; }
+            if (!/^\s*[|>]/.test(rest)) continue;           // single-line description, done
+            for (let j = i + 1; j < lines.length; j++) {      // scan the block body
+              if (lines[j].trim() && lines[j].search(/\S/) <= indent.length) break;
+              if (/\$\{\{/.test(lines[j])) badDesc.push(lines[j]);
+            }
+          }
           if (badDesc.length) {
             console.log(`::error::action.yml input description contains a \$\{\{ \}\} expression (breaks action loading):\n${badDesc.join("\n")}`);
             process.exit(1);

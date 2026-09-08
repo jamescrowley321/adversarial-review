@@ -35,9 +35,11 @@ inputs:
   lenses:
     description: |
       mode=gate: the lens set the gate must see report, as JSON. Pass the SAME
-      value that built the caller matrix — `${{ needs.config.outputs.matrix }}` —
-      so the two cannot drift:
-        lenses: ${{ needs.config.outputs.matrix }}
+      value that built the caller matrix — the config job's matrix output — so
+      the two cannot drift. See examples/caller-workflow.yml for the exact line;
+      it is not written here because a templated expression anywhere in an input
+      description is evaluated when the action loads, and the action then fails
+      to load at all.
       Accepts the matrix object {"include":[{"lens":"cold_read",...}]} or a plain
       array ["cold_read","edge_case"]. Never a delimited string: an Actions input
       is always a string, so the only question is which parser reads it, and JSON

@@ -733,6 +733,28 @@ describe("fetch-path fixtures", () => {
     assert.ok(prompt.includes(`${d.maxBytes} bytes`), "the prompt does not name the shipped byte cap");
   });
 
+  test("no input description contains a templated expression, on any line", () => {
+    // A `${{ }}` anywhere inside a description is evaluated when the action
+    // loads, and the action then fails to load at all — every lens job dies with
+    // "Unrecognized named-value". The lint guard for this only inspected the
+    // `description:` line itself, so an example written on the second line of a
+    // `description: |` block sailed past it and broke all eight jobs.
+    const lines = rf(pjoin(REPO_ROOT, "action.yml"), "utf8").split("\n");
+    const bad = [];
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^(\s*)description:(.*)$/);
+      if (!m) continue;
+      const [, indent, rest] = m;
+      if (/\$\{\{/.test(rest)) { bad.push(lines[i]); continue; }
+      if (!/^\s*[|>]/.test(rest)) continue;
+      for (let j = i + 1; j < lines.length; j++) {
+        if (lines[j].trim() && lines[j].search(/\S/) <= indent.length) break;
+        if (/\$\{\{/.test(lines[j])) bad.push(lines[j]);
+      }
+    }
+    assert.deepEqual(bad, [], `templated expression inside an input description:\n${bad.join("\n")}`);
+  });
+
   test("action.yml carries no copy of the lens list", () => {
     // The registry was decorative until the action read it: manifest.json said
     // the policy lens was called "Compliance" for a whole release and nothing
