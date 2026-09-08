@@ -33,9 +33,17 @@ inputs:
     required: false
     default: ''
   lenses:
-    description: "Comma-separated lens keys the gate should expect (mode=gate). Must match the caller matrix."
+    description: |
+      mode=gate: the lens set the gate must see report, as JSON. Pass the SAME
+      value that built the caller matrix — `${{ needs.config.outputs.matrix }}` —
+      so the two cannot drift:
+        lenses: ${{ needs.config.outputs.matrix }}
+      Accepts the matrix object {"include":[{"lens":"cold_read",...}]} or a plain
+      array ["cold_read","edge_case"]. Never a delimited string: an Actions input
+      is always a string, so the only question is which parser reads it, and JSON
+      is the one that cannot be broken by a character inside a value.
     required: false
-    default: 'cold_read,edge_case,acceptance,security,red_team'
+    default: '["cold_read","edge_case","acceptance","security","red_team"]'
   api_key:
     description: "Provider API key (e.g. OpenRouter). Required for mode=lens. Pass from a secret."
     required: false
@@ -107,7 +115,16 @@ inputs:
     required: false
     default: 'true'
   required_checks:
-    description: "mode=preflight: comma-separated check-run names that must PASS before the review runs (e.g. lint, typecheck, docker, secret-scan). Preflight waits for them and fails if any fails, so the paid lenses never run on a PR that fails the cheap deterministic gates. List only checks that run on every PR."
+    description: |
+      mode=preflight: check-run names that must PASS before the review runs, ONE
+      PER LINE. Check names routinely contain commas ("Build, lint and test"), so
+      this is never comma-separated. Preflight waits for them and fails if any
+      fails, so the paid lenses never run on a PR that fails the cheap
+      deterministic gates. List only checks that run on every PR. Pass a block
+      scalar:
+        required_checks: |
+          Build, lint and test
+          gitleaks
     required: false
     default: ''
   preflight_timeout_seconds:
@@ -122,7 +139,8 @@ runs:
   using: 'composite'
   steps:
     # ── Shared context: resolve the effective PR number and lens display names. ──
-    - id: ctx
+    - name: Resolve context and lens names
+      id: ctx
       shell: node {0}
       env:
         IN_MODE: ${{ inputs.mode }}
@@ -162,7 +180,28 @@ runs:
         }
 
         // Gate: pipe-separated display names from the expected keys.
-        const keys = (process.env.IN_LENSES || "").split(",").map((s) => s.trim()).filter(Boolean);
+        //
+        // The input is JSON, and it is meant to be the very object that built the
+        // caller's matrix — so "the gate's expected set" and "the jobs that ran"
+        // are one value rather than two that a comment asks you to keep in sync.
+        // A delimited string was the old shape; splitting a list on a character
+        // that can occur inside a value is how a preflight once waited out its
+        // whole timeout for three checks that never existed.
+        let parsed;
+        const raw = (process.env.IN_LENSES || "").trim();
+        try {
+          parsed = JSON.parse(raw);
+        } catch (e) {
+          die(`lenses must be JSON — the matrix object or an array of keys. Got: ${raw.slice(0, 120)}`);
+        }
+        const keys = Array.isArray(parsed)
+          ? parsed.map((v) => (typeof v === "string" ? v : v && v.lens))
+          : Array.isArray(parsed && parsed.include)
+            ? parsed.include.map((e) => e && e.lens)
+            : die(`lenses JSON must be an array or a matrix object with "include". Got: ${raw.slice(0, 120)}`);
+        if (!keys.length || keys.some((k) => typeof k !== "string" || !k)) {
+          die(`lenses JSON produced no usable lens keys. Got: ${raw.slice(0, 120)}`);
+        }
         const expected = keys.map((k) => NAMES[k] || die(`Unknown lens key '${k}' in lenses input`));
         append("expected", expected.join("|"));
 
@@ -974,7 +1013,11 @@ runs:
         POLL_S: ${{ inputs.preflight_poll_seconds }}
       with:
         script: |
-          const required = (process.env.REQUIRED_CHECKS || "").split(",").map((s) => s.trim()).filter(Boolean);
+          // One check name per line. A check name is an arbitrary human string
+          // and commas are legal in it, so comma-splitting turned
+          // "Foundation build, lint, and tests" into three names that never
+          // report and preflight waited out its whole timeout.
+          const required = (process.env.REQUIRED_CHECKS || "").split("\n").map((s) => s.trim()).filter(Boolean);
           if (!required.length) { core.info("No required_checks configured — preflight passes."); return; }
 
           const headSha = context.payload.pull_request.head.sha;

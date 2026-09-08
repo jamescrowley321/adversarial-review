@@ -8,7 +8,7 @@
 // severity definitions, Grounding, the JSON output contract — is the shipped
 // text, verbatim.
 
-import { readFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ROOT } from "./harness.mjs";
@@ -156,6 +156,29 @@ const TARGETING = new RegExp(
  * production sends; a fetch-path fixture overrides the caps so the limit the
  * prompt NAMES is the limit the harness actually applied.
  */
+/** Run action.yml's real context step, which resolves the gate's expected set. */
+export async function resolveContext({ mode = "gate", lenses = "", lens = "" } = {}) {
+  const src = extractStepScript(readFileSync(join(ROOT, "action.yml"), "utf8"), "Resolve context and lens names", "run");
+  const dir = mkdtempSync(join(tmpdir(), "bpr-ctx-"));
+  const outFile = join(dir, "github_output");
+  writeFileSync(outFile, "");
+  try {
+    await runNodeScript(src, {
+      env: {
+        IN_MODE: mode, IN_LENS: lens, IN_LENSES: lenses, IN_PR: String(EVAL_PR),
+        EVENT_PR: String(EVAL_PR), IN_KEY: "test-key",
+        GITHUB_OUTPUT: outFile, GITHUB_ENV: join(dir, "github_env"),
+      },
+    });
+    const out = {};
+    for (const line of readFileSync(outFile, "utf8").split("\n")) {
+      const m = line.match(/^([a-z_]+)=(.*)$/);
+      if (m) out[m[1]] = m[2];
+    }
+    return out;
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
 export function composeFromAction(lensKey, diff = actionDiffDefaults()) {
   const src = extractStepScript(readFileSync(join(ROOT, "action.yml"), "utf8"), "Compose lens prompt", "run");
   const dir = mkdtempSync(join(tmpdir(), "adv-eval-"));

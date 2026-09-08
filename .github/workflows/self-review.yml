@@ -67,7 +67,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.pick.outputs.matrix }}
-      csv: ${{ steps.pick.outputs.csv }}
     steps:
       - id: pick
         shell: node {0}
@@ -96,7 +95,6 @@ jobs:
           const include = keys.map((k) => ({ lens: k, name: NAMES[k] }));
           const fs = require("fs");
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include })}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `csv=${keys.join(",")}\n`);
 
   # Spend controls (no approval gate — an approval environment can't stop the
   # same-repo threat it appears to, because `on: pull_request` runs the workflow
@@ -205,5 +203,5 @@ jobs:
         uses: ./
         with:
           mode: gate
-          lenses: ${{ needs.config.outputs.csv }}
+          lenses: ${{ needs.config.outputs.matrix }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

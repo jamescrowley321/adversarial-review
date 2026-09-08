@@ -9,7 +9,7 @@
 // Usage:
 //   node scripts/run-local.mjs                     # adversarial lenses vs origin/main
 //   node scripts/run-local.mjs --base main
-//   node scripts/run-local.mjs --lens security,red_team
+//   node scripts/run-local.mjs --lens security --lens red_team   # repeatable
 //   PI_BIN=pi MODEL=z-ai/glm-5.2 node scripts/run-local.mjs
 //
 // Requires: git, the `pi` CLI on PATH, and a provider key in OPENROUTER_API_KEY.
@@ -54,7 +54,8 @@ function printHelp() {
 }
 
 let base = "origin/main";
-let lenses = ["cold_read", "edge_case", "acceptance", "security", "red_team"];
+const DEFAULT_LENSES = ["cold_read", "edge_case", "acceptance", "security", "red_team"];
+let lensOverride = null;
 let PI_BIN = process.env.PI_BIN || "pi";
 let PROVIDER = process.env.PROVIDER || "openrouter";
 let MODEL = process.env.MODEL || "z-ai/glm-5.2";
@@ -74,12 +75,19 @@ for (let i = 0; i < argv.length; i++) {
       process.exit(1);
     }
   }
-  else if (a === "--lens") lenses = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
+  // Repeatable, not comma-separated: --lens security --lens red_team
+  else if (a === "--lens") {
+    const v = argv[++i];
+    if (!v) { console.error("error: --lens requires a value"); process.exit(1); }
+    (lensOverride ??= []).push(v.trim());
+  }
   else if (a === "--model") MODEL = argv[++i];
   else if (a === "--provider") PROVIDER = argv[++i];
   else if (a === "-h" || a === "--help") { printHelp(); process.exit(0); }
   else { console.error(`Unknown arg: ${a}`); process.exit(2); }
 }
+
+const lenses = lensOverride ?? DEFAULT_LENSES;
 
 mkdirSync(OUT, { recursive: true });
 

@@ -15,7 +15,7 @@ import { runParseStep, runGateStep, botReview, agentJsonComment, HEAD_SHA } from
 import { LENS_KEYS, lensName, personaHeading, shippedLensKeys, readPersona, readShared } from "./lib/lenses.mjs";
 import { foldReps, score, violations, THRESHOLDS } from "./lib/scorecard.mjs";
 import { extractStepScript, runNodeScript } from "./lib/action-script.mjs";
-import { composeFromAction, composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault, listFixtureIds } from "./lib/fixtures.mjs";
+import { composeFromAction, resolveContext, composePrompt, loadFixture, fixtureDiffPayload, actionDiffDefaults, evalPreamble, actionInputDefault, listFixtureIds } from "./lib/fixtures.mjs";
 import { truncateDiff, truncateDiffByBytes, byteMarker, renderGetPrDiff } from "./lib/pi-diff.mjs";
 import { createSubmissionTracker, NUDGE_MESSAGE } from "../extensions/lib/submission-state.mjs";
 import { ROOT as REPO_ROOT } from "./lib/harness.mjs";
@@ -730,6 +730,30 @@ describe("fetch-path fixtures", () => {
     const d = actionDiffDefaults();
     assert.ok(prompt.includes(`${d.maxLines} lines`), "the prompt does not name the shipped line cap");
     assert.ok(prompt.includes(`${d.maxBytes} bytes`), "the prompt does not name the shipped byte cap");
+  });
+
+  test("the gate's expected set comes from the matrix object itself", async () => {
+    // The point of taking JSON is that the caller passes the SAME value that
+    // built its matrix, so "the jobs that ran" and "the set the gate waits for"
+    // cannot drift. The old input was a parallel list kept in sync by a comment.
+    const r = await resolveContext({
+      lenses: JSON.stringify({ include: [{ lens: "cold_read", name: "Cold Read" }, { lens: "red_team", name: "Red Team" }] }),
+    });
+    assert.equal(r.expected, "Cold Read|Red Team");
+  });
+
+  test("a plain JSON array of keys also resolves", async () => {
+    const r = await resolveContext({ lenses: JSON.stringify(["cold_read", "security"]) });
+    assert.equal(r.expected, "Cold Read|Security Review");
+  });
+
+  test("a delimited string is refused rather than half-parsed", async () => {
+    // The failure this removes: a list split on a character that can occur
+    // inside a value. A check name containing a comma became three names that
+    // never reported and preflight waited out its entire timeout.
+    for (const bad of ["cold_read,security", "cold_read security", "cold_read\nsecurity", ""]) {
+      await assert.rejects(() => resolveContext({ lenses: bad }), `accepted ${JSON.stringify(bad)}`);
+    }
   });
 
   test("a lens key that is not in the registry never reaches the filesystem", async () => {
