@@ -1290,11 +1290,11 @@ describe("nudge delivery", () => {
   test("a lens that already submitted is not nudged", async () => {
     const sent = [];
     const tracker = createSubmissionTracker();
-    tracker.onSubmitted?.();
+    tracker.markCalled(true); // the review landed
     const pi = fakePi(() => {});
     attachNudge(pi, tracker, () => {});
     await pi.fire({ sendUserMessage: (m) => sent.push(m) });
-    if (typeof tracker.onSubmitted === "function") assert.deepEqual(sent, [], "a submitted lens was nudged anyway");
+    assert.deepEqual(sent, [], "a lens that already submitted was nudged anyway");
   });
 });
 

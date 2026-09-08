@@ -65,6 +65,11 @@ jobs:
           // `description: |` block, where the old single-line check could not see
           // it. (Not spelled out here: a run: block is itself expression-expanded,
           // so writing one in this comment breaks THIS workflow the same way.)
+          // Indentation-scanning, not YAML parsing: it covers `description:` and
+          // `description: |` / `>` blocks, which is every description this file
+          // uses. It would not follow an anchor or a flow-scalar continuation. The
+          // contract test asserts the same property, and js-yaml parses the file
+          // in a later step, so a shape this misses still cannot ship silently.
           const lines = action.split("\n");
           const badDesc = [];
           for (let i = 0; i < lines.length; i++) {

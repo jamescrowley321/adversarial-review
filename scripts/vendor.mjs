@@ -17,7 +17,7 @@
 // two separate, diffable things.
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -51,6 +51,10 @@ for (const f of readdirSync(join(ROOT, "lenses"))) {
   // submit_findings, neither of which exists locally. Shipping it to a local
   // harness is how "ignore that CI wording" gets back into the prompts.
   if (!f.endsWith(".md") || f === "README.md" || f === "shared_instructions.md") continue;
+  // readdirSync yields basenames — it cannot return a path separator, and never
+  // returns "." or ".." — so this is belt and braces rather than a live hole.
+  // It costs one comparison and makes the write provably local to lensDir.
+  if (basename(f) !== f) { console.error(`error: refusing suspicious lens filename ${JSON.stringify(f)}`); process.exit(1); }
   writeFileSync(join(lensDir, f), readFileSync(join(ROOT, "lenses", f)));
   copied.push(f);
 }
