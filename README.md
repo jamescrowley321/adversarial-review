@@ -211,16 +211,22 @@ adapters, so the same personas review your code in CI *and* in your editor:
   can clone it. Installs record the marketplace's commit SHA and move when you
   refresh it, the same pinning shape the CI workflow uses.
 
-- **Codex** — vendor the personas into the repo Codex works in and paste the
-  block it prints into that repo's `AGENTS.md`:
+- **Codex** — from inside the repo Codex works in, no checkout of this one
+  needed:
 
   ```
-  node scripts/vendor.mjs --into /path/to/your-repo --print-agents-block
+  npx github:jamescrowley321/blind-peer-review#v3 --into . --print-agents-block
   ```
 
+  That writes `.blind-peer-review/vendor/` (personas, registry and contract,
+  version-stamped) and prints the block to paste into that repo's `AGENTS.md`.
   Codex reads `AGENTS.md` from the repo it is in and cannot reach into an
-  action, so the personas have to be on disk. Re-run to re-sync after a release;
-  don't hand-edit the vendored copies. See [`adapters/`](adapters).
+  action, so the personas have to be on disk. Re-run after a release to re-sync;
+  don't hand-edit the vendored copies.
+
+  `#v3` follows the major; use `#v3.0.0` to pin exactly. If you'd rather not run
+  `npx`, clone this repo and run `node scripts/vendor.mjs --into /path/to/repo`
+  — same thing. See [`adapters/`](adapters).
 
 - **pi (local)** — `node scripts/run-local.mjs` (below).
 - **Cursor** — [`adapters/cursor/`](adapters/cursor) exists but is unverified;

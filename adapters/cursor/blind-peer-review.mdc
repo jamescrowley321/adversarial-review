@@ -4,9 +4,9 @@ globs:
 alwaysApply: false
 ---
 
-# Adversarial review (Cursor)
+# Blind peer review (Cursor)
 
-When asked to "adversarially review", "review my changes/diff", "run the lenses",
+When asked to "review my changes", "review my changes/diff", "run the lenses",
 or before you help open a PR, run this review. Each lens is a **fresh, skeptical**
 reviewer that sees only the diff — do not let the intent or one lens's output bias
 another.

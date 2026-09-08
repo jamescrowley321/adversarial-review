@@ -11,7 +11,7 @@ ship in this repo directly.
 | **pi** (CI gate) | [`../action.yml`](../action.yml) + [`../examples/caller-workflow.yml`](../examples/caller-workflow.yml) | this repo → consumer `.github/workflows/` | On every PR; fail-closed merge gate |
 | **pi** (local) | [`../scripts/run-local.mjs`](../scripts/run-local.mjs) | this repo | `node scripts/run-local.mjs` before pushing |
 | **Claude Code** | [`../skills/check/`](../skills/check) + [`../agents/`](../agents) | installed plugin | `/blind-peer-review:check`, or invoke a lens agent |
-| **Codex** | [`codex/AGENTS.md`](codex/AGENTS.md) + [`../scripts/vendor.mjs`](../scripts/vendor.mjs) | consumer repo `AGENTS.md` + `.blind-peer-review/vendor/` | `node scripts/vendor.mjs --into <repo> --print-agents-block`, then Codex reads it before working |
+| **Codex** | [`codex/AGENTS.md`](codex/AGENTS.md) + [`../scripts/vendor.mjs`](../scripts/vendor.mjs) | consumer repo `AGENTS.md` + `.blind-peer-review/vendor/` | `npx github:jamescrowley321/blind-peer-review#v3 --into . --print-agents-block` in the target repo, then Codex reads it before working |
 | **Cursor** _(unverified)_ | [`cursor/blind-peer-review.mdc`](cursor/blind-peer-review.mdc) | consumer repo `.cursor/rules/` | Ask Cursor to run the review. Written but never exercised — we run Codex, pi and Claude Code. Treat as a starting point. |
 
 ## The one override convention (all harnesses honor it)

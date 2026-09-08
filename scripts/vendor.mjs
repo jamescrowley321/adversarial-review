@@ -6,7 +6,10 @@
 // plugin) needs the personas on disk. This copies them, stamps the version, and
 // prints the AGENTS.md block to paste.
 //
-// Usage:
+// Usage — from inside the repo you want reviewed, no checkout of this one:
+//   npx github:jamescrowley321/blind-peer-review#v3 --into . --print-agents-block
+//
+// Or from a checkout:
 //   node scripts/vendor.mjs --into ../some-repo
 //   node scripts/vendor.mjs --into ../some-repo --print-agents-block
 //

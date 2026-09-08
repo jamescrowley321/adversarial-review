@@ -1,18 +1,19 @@
 <!--
 Codex adapter. Codex reads AGENTS.md in the repo it is working in and cannot
 reach into a GitHub Action, so the personas have to be on disk. Install both in
-one step, from a checkout of blind-peer-review:
+one step, from inside the repo Codex works in — no checkout of
+blind-peer-review needed:
 
-    node scripts/vendor.mjs --into /path/to/your-repo --print-agents-block
+    npx github:jamescrowley321/blind-peer-review#v3 --into . --print-agents-block
 
 That writes .blind-peer-review/vendor/ (personas + contract, version-stamped)
 and prints this block to paste into the repo's AGENTS.md. Re-run it to re-sync
 after an upstream release; never hand-edit the vendored copies.
 -->
 
-## Adversarial review before pushing
+## Blind peer review before pushing
 
-Before you open a PR (or when asked to "adversarially review" / "run the lenses"),
+Before you open a PR (or when asked to "review my changes" / "run the lenses"),
 review the working diff with fresh, skeptical lenses. Each lens sees ONLY the diff
 — no plan, no intent, no other lens's findings.
 
