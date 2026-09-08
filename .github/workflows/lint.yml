@@ -61,8 +61,10 @@ jobs:
           // Whole description BLOCKS, not just the `description:` line. A
           // templated expression anywhere inside one is evaluated at action-load
           // time and the action fails to load — which is exactly what happened
-          // when an example `${{ needs... }}` was written on the second line of a
-          // `description: |` block, where the old single-line check could not see it.
+          // when an example expression was written on the second line of a
+          // `description: |` block, where the old single-line check could not see
+          // it. (Not spelled out here: a run: block is itself expression-expanded,
+          // so writing one in this comment breaks THIS workflow the same way.)
           const lines = action.split("\n");
           const badDesc = [];
           for (let i = 0; i < lines.length; i++) {
