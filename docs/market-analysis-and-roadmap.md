@@ -431,7 +431,7 @@ competitive gap (§4).
   *hardened* reviewer" pitch built on the injection threat model + **OWASP LLM 2026**
   (LLM01 #1). This is the message no incumbent leads with. *→ diff 5.1.* [S28][S29]
 - **Ship the planned Unicode/zero-width strip (control C7) and a diff sanitizer**, and
-  publish a short "prompt-injection test-suite / red-team fixtures" result. Turn the
+  publish a short "prompt-injection test-suite / red_team fixtures" result. Turn the
   threat model into demonstrable evidence. *→ diff 5.1.* [S29]
 - **De-risk the runtime chain now:** pin pi + the pi-action to SHAs, document a
   fallback (e.g., a Claude Code / Codex adapter that runs the same lenses without the

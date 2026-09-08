@@ -38,10 +38,10 @@ describe("lens registry", () => {
     assert.deepEqual(shippedLensKeys(), [...LENS_KEYS].sort());
   });
 
-  test("shared-instructions.md still specifies the JSON output contract", () => {
+  test("shared_instructions.md still specifies the JSON output contract", () => {
     const s = readShared();
     for (const field of ['"lens"', '"summary"', '"findings"', '"severity"', '"location"', '"detail"', '"recommendation"']) {
-      assert.ok(s.includes(field), `shared-instructions.md no longer documents ${field} — the parser expects it`);
+      assert.ok(s.includes(field), `shared_instructions.md no longer documents ${field} — the parser expects it`);
     }
   });
 });
@@ -724,7 +724,7 @@ describe("fetch-path fixtures", () => {
     // missing from every prompt the paid layer ever sent — while being present
     // in every real run, because all three inputs have defaults. Nothing failed;
     // the coverage just quietly wasn't there.
-    const prompt = await composePrompt("acceptance", loadFixture("acceptance-docs-only"));
+    const prompt = await composePrompt("acceptance", loadFixture("acceptance_docs_only"));
     assert.match(prompt, /Diff scope:/);
     assert.match(prompt, /Diff limits:/);
     const d = actionDiffDefaults();
@@ -736,7 +736,7 @@ describe("fetch-path fixtures", () => {
     // Production's invariant: get_pr_diff truncates at the same numbers the
     // prompt discloses. A fixture that cut at one cap while naming another
     // would be teaching the lens to distrust the disclosure.
-    const fx = loadFixture("truncation-tail-cut-must-not-block");
+    const fx = loadFixture("truncation_tail_cut_must_not_block");
     const prompt = await composePrompt("acceptance", fx);
     assert.ok(prompt.includes(`${fx.fetch.max_lines} lines`), "the prompt does not name the fixture's line cap");
     assert.ok(prompt.includes(`(truncated at ${fx.fetch.max_lines} lines,`), "the payload carries no truncation marker");
@@ -746,8 +746,8 @@ describe("fetch-path fixtures", () => {
     // Telling the lens up front that the diff was truncated would measure
     // instruction-following, not whether it notices the boundary. In production
     // the marker in the payload is the only signal, so it is the only signal here.
-    const complete = evalPreamble(loadFixture("acceptance-docs-only"));
-    const cut = evalPreamble(loadFixture("truncation-tail-cut-must-not-block"));
+    const complete = evalPreamble(loadFixture("acceptance_docs_only"));
+    const cut = evalPreamble(loadFixture("truncation_tail_cut_must_not_block"));
     assert.match(complete, /nothing was truncated/);
     // The harness must neither lie about completeness nor give the answer away.
     // (The shipped "Diff limits" paragraph does say "truncated" — that is #36's
@@ -757,7 +757,7 @@ describe("fetch-path fixtures", () => {
   });
 
   test("the fetch-path payload is the tool result, fence and header included", async () => {
-    const fx = loadFixture("truncation-head-defect-must-block");
+    const fx = loadFixture("truncation_head_defect_must_block");
     const { text, truncation } = fixtureDiffPayload(fx);
     assert.equal(truncation.reason, "bytes");
     assert.match(text, /^PR #\d+ Diff:\n```diff\n/);
@@ -765,7 +765,7 @@ describe("fetch-path fixtures", () => {
   });
 
   test("an ordinary fixture is still fed inline and untruncated", async () => {
-    const { truncation } = fixtureDiffPayload(loadFixture("acceptance-docs-only"));
+    const { truncation } = fixtureDiffPayload(loadFixture("acceptance_docs_only"));
     assert.equal(truncation, null);
   });
 });

@@ -14,7 +14,7 @@ export function lensNames(yml = readFileSync(join(ROOT, "action.yml"), "utf8")) 
   if (!m) throw new Error("action.yml: could not find the `const NAMES = {…}` lens table");
   const names = {};
   for (const line of m[1].split("\n")) {
-    const kv = line.match(/^\s*"?([a-z0-9-]+)"?:\s*"([^"]+)",?\s*$/);
+    const kv = line.match(/^\s*"?([a-z0-9_-]+)"?:\s*"([^"]+)",?\s*$/);
     if (kv) names[kv[1]] = kv[2];
   }
   if (!Object.keys(names).length) throw new Error("action.yml: NAMES table parsed empty");
@@ -26,7 +26,7 @@ export const lensName = (key) => lensNames()[key];
 
 export const personaPath = (key) => join(ROOT, "lenses", `${key}.md`);
 export const readPersona = (key) => readFileSync(personaPath(key), "utf8");
-export const readShared = () => readFileSync(join(ROOT, "lenses", "shared-instructions.md"), "utf8");
+export const readShared = () => readFileSync(join(ROOT, "lenses", "shared_instructions.md"), "utf8");
 
 /** The persona's H1 — what a model most often echoes back as `lens`. */
 export function personaHeading(key) {

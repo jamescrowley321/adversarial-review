@@ -1,6 +1,6 @@
 # Dogfood: Blind Peer Review reviews its own pull requests using the action in
 # this repo (uses: ./). Toggle lenses in the `config` job's ENABLED list.
-# owasp-llm is enabled here on purpose — this action is itself an LLM app.
+# owasp_llm is enabled here on purpose — this action is itself an LLM app.
 
 name: Self Review
 
@@ -73,20 +73,20 @@ jobs:
         shell: node {0}
         env:
           ENABLED: |
-            cold-read
-            edge-case
+            cold_read
+            edge_case
             acceptance
             security
-            red-team
+            red_team
             policy
-            owasp-web
-            owasp-llm
+            owasp_web
+            owasp_llm
         run: |
           const NAMES = {
-            "cold-read": "Cold Read", "edge-case": "Edge Cases",
-            acceptance: "Acceptance Criteria", security: "Security Review", "red-team": "Red Team",
-            policy: "Policy & Provenance", "owasp-web": "OWASP Web Top 10",
-            "owasp-llm": "OWASP LLM Top 10",
+            "cold_read": "Cold Read", "edge_case": "Edge Cases",
+            acceptance: "Acceptance Criteria", security: "Security Review", "red_team": "Red Team",
+            policy: "Policy & Provenance", "owasp_web": "OWASP Web Top 10",
+            "owasp_llm": "OWASP LLM Top 10",
           };
           const keys = (process.env.ENABLED || "").split("\n")
             .map((l) => l.replace(/#.*/, "").trim()).filter(Boolean);

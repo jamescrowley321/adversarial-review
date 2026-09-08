@@ -39,20 +39,20 @@ jobs:
         shell: node {0}
         env:
           ENABLED: |
-            cold-read          # logic bugs, footguns (zero context)
-            edge-case      # unhandled branches / boundaries
+            cold_read          # logic bugs, footguns (zero context)
+            edge_case      # unhandled branches / boundaries
             acceptance     # PR acceptance criteria met + tested
             security       # exploitable security vulnerabilities
-            red-team          # red-team attack paths (auth/infra only)
+            red_team          # red_team attack paths (auth/infra only)
             policy     # AI-provenance policy + your own rules
-            # owasp-web    # OWASP Web Top 10 (2021) — optional, runs in parallel
-            # owasp-llm    # OWASP GenAI/LLM Top 10 (2026) — optional, for LLM apps
+            # owasp_web    # OWASP Web Top 10 (2021) — optional, runs in parallel
+            # owasp_llm    # OWASP GenAI/LLM Top 10 (2026) — optional, for LLM apps
         run: |
           const NAMES = {
-            "cold-read": "Cold Read", "edge-case": "Edge Cases",
-            acceptance: "Acceptance Criteria", security: "Security Review", "red-team": "Red Team",
-            policy: "Policy & Provenance", "owasp-web": "OWASP Web Top 10",
-            "owasp-llm": "OWASP LLM Top 10",
+            "cold_read": "Cold Read", "edge_case": "Edge Cases",
+            acceptance: "Acceptance Criteria", security: "Security Review", "red_team": "Red Team",
+            policy: "Policy & Provenance", "owasp_web": "OWASP Web Top 10",
+            "owasp_llm": "OWASP LLM Top 10",
           };
           const keys = (process.env.ENABLED || "").split("\n")
             .map((l) => l.replace(/#.*/, "").trim()).filter(Boolean);

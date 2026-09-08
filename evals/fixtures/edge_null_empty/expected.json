@@ -1,0 +1,12 @@
+{
+  "class": "must-block",
+  "smoke": true,
+  "pr_title": "Unhandled boundary paths for the Edge Cases: division by zero-leng",
+  "guards": "Unhandled boundary paths for the Edge Cases: division by zero-length input, JSON.parse without a guard, and indexing the first element of a possibly-empty array. (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "edge_case": {
+      "block": true,
+      "location_matches": "^src/stats\\.js:"
+    }
+  }
+}

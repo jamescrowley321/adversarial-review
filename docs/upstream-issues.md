@@ -125,11 +125,11 @@ payload (the CommonMark rule), or drop the fence and delimit with a token that
 cannot occur in a diff.
 
 **Our workaround (partial).** The composed prompt wraps the whole tool result in
-`----- BEGIN/END DIFF UNDER REVIEW -----` markers, and `shared-instructions.md`
+`----- BEGIN/END DIFF UNDER REVIEW -----` markers, and `shared_instructions.md`
 opens with a trust boundary telling the lens that everything it reads through a
 tool is untrusted data and that smuggled instructions are themselves a MUST FIX
-finding. Three fixtures (`injection-diff-comment`, `injection-hidden-unicode`,
-`injection-pr-body`) measure that the lens reports rather than obeys. The port
+finding. Three fixtures (`injection_diff_comment`, `injection_hidden_unicode`,
+`injection_pr_body`) measure that the lens reports rather than obeys. The port
 in `evals/lib/pi-diff.mjs` reproduces the unescaped fence **deliberately**, for
 the same reason it reproduces the byte-budget defect: a fixture has to show a
 lens what the real tool would have handed it.

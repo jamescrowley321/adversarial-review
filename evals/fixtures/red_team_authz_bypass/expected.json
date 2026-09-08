@@ -1,0 +1,12 @@
+{
+  "class": "must-block",
+  "smoke": true,
+  "pr_title": "New auth middleware with a path-prefix bypass (any URL starting with /pu",
+  "guards": "New auth middleware with a path-prefix bypass (any URL starting with /public skips verification, including /public/../admin) and a hardcoded fallback JWT secret. (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "red_team": {
+      "block": true,
+      "location_matches": "^src/middleware/auth\\.js:"
+    }
+  }
+}

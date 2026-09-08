@@ -9,7 +9,7 @@
 // Usage:
 //   node scripts/run-local.mjs                     # adversarial lenses vs origin/main
 //   node scripts/run-local.mjs --base main
-//   node scripts/run-local.mjs --lens security,red-team
+//   node scripts/run-local.mjs --lens security,red_team
 //   PI_BIN=pi MODEL=z-ai/glm-5.2 node scripts/run-local.mjs
 //
 // Requires: git, the `pi` CLI on PATH, and a provider key in OPENROUTER_API_KEY.
@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LENS_DIR = join(ROOT, "lenses");
-const CONTRACT = join(ROOT, "contracts", "shared-review-contract.md");
+const CONTRACT = join(ROOT, "contracts", "shared_review_contract.md");
 const OUT = ".blind-peer-review/out";              // ephemeral: diff + per-lens findings
 const OVERRIDE_DIR = ".blind-peer-review/lenses";  // committed: per-repo persona overrides
 
@@ -38,7 +38,7 @@ function printHelp() {
 }
 
 let base = "origin/main";
-let lenses = ["cold-read", "edge-case", "acceptance", "security", "red-team"];
+let lenses = ["cold_read", "edge_case", "acceptance", "security", "red_team"];
 let PI_BIN = process.env.PI_BIN || "pi";
 let PROVIDER = process.env.PROVIDER || "openrouter";
 let MODEL = process.env.MODEL || "z-ai/glm-5.2";

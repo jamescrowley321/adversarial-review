@@ -7,8 +7,17 @@ reads these same markdown files. Tune a persona here once and every harness pick
 it up.
 
 Only lenses live here. The harness-neutral review contract is one directory up in
-`contracts/shared-review-contract.md`, because this directory is read as a
+`contracts/shared_review_contract.md`, because this directory is read as a
 registry — a non-lens file sitting in it gets enumerated as a lens.
+
+## Naming
+
+Lens identifiers are `snake_case` — the manifest keys, the `lens:` input values,
+the persona filenames and the fixture directories. Display names are Title Case
+("Cold Read"), because they are read by humans in review headers and check names.
+The one exception is each agent's `name:` frontmatter field, which stays
+kebab-case: that is the plugin platform's invocation identifier, and every agent
+and skill shipped in the official marketplace is kebab-cased there.
 
 ## Files
 
@@ -17,7 +26,7 @@ registry — a non-lens file sitting in it gets enumerated as a lens.
   gate parses), `activation`, and whether it is enabled by default. This is the
   one list — adapters and the eval harness read it instead of re-deriving the set
   from the directory or hardcoding names.
-- `shared-instructions.md` — the **trust boundary**, tool contract, severity
+- `shared_instructions.md` — the **trust boundary**, tool contract, severity
   scale, and output envelope appended to every lens. This is the security
   backbone and is **central and non-overridable** (see below).
 - `<key>.md` — one persona per lens. Plain markdown, no harness-specific
@@ -27,14 +36,14 @@ registry — a non-lens file sitting in it gets enumerated as a lens.
 
 | Key | Name | Activation | Default |
 |-----|------|-----------|---------|
-| `cold-read` | Cold Read | always | on |
-| `edge-case` | Edge Cases | always | on |
+| `cold_read` | Cold Read | always | on |
+| `edge_case` | Edge Cases | always | on |
 | `acceptance` | Acceptance Criteria | always | on |
 | `security` | Security Review | always | on |
-| `red-team` | Red Team | security surface (self-skips) | on |
+| `red_team` | Red Team | security surface (self-skips) | on |
 | `policy` | Compliance | always | off (opt-in) |
-| `owasp-web` | OWASP Web Top 10 | always | off (opt-in) |
-| `owasp-llm` | OWASP LLM Top 10 | LLM surface (self-skips) | off (opt-in) |
+| `owasp_web` | OWASP Web Top 10 | always | off (opt-in) |
+| `owasp_llm` | OWASP LLM Top 10 | LLM surface (self-skips) | off (opt-in) |
 
 ## Tuning: append & override
 
@@ -48,7 +57,7 @@ directory, honored by every adapter:
 
 - **Override** — a file at that path *replaces* the base persona of the same
   `key` (e.g. a repo ships a PHI/PII-tuned `security.md`, or a
-  domain-specific `owasp-web.md`).
+  domain-specific `owasp_web.md`).
 - **Append** — add a `<new-key>.md` there plus a `manifest.json` entry to run an
   extra lens the base set doesn't ship.
 
@@ -69,5 +78,5 @@ owns the files**:
 Reading overrides from the repo's **protected base branch** (safe from PR
 tampering) is a deliberate future step, not enabled yet.
 
-`shared-instructions.md` is never overridable — the trust boundary and tool
+`shared_instructions.md` is never overridable — the trust boundary and tool
 allowlist are the security guarantee and stay identical for every consumer.

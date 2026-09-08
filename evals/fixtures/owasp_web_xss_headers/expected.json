@@ -1,0 +1,12 @@
+{
+  "class": "must-block",
+  "smoke": true,
+  "pr_title": "Reflected XSS (query param concatenated into HTML) plus wildcard CORS wi",
+  "guards": "Reflected XSS (query param concatenated into HTML) plus wildcard CORS with credentials enabled \u2014 A03 and A05/A01 for the OWASP Web lens. (ported from the pre-#28 fixture corpus)",
+  "lenses": {
+    "owasp_web": {
+      "block": true,
+      "location_matches": "^src/routes/greeting\\.js:"
+    }
+  }
+}

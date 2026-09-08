@@ -87,8 +87,8 @@ merge is blocked until the MUST FIX findings are resolved.
 |-------|---------|-------|
 | `mode` | — (required) | `lens` or `gate` |
 | `submit_findings_tool` | `true` | Deliver the review through a schema-checked `submit_findings` tool call instead of the agent's final message. `false` runs message-only. |
-| `lens` | — | Required for `mode: lens`: `cold-read` \| `edge-case` \| `acceptance` \| `security` \| `red-team` \| `policy` \| `owasp-web` \| `owasp-llm` |
-| `lenses` | `cold-read,edge-case,acceptance,security,red-team` | Gate's expected set — must match the caller matrix |
+| `lens` | — | Required for `mode: lens`: `cold_read` \| `edge_case` \| `acceptance` \| `security` \| `red_team` \| `policy` \| `owasp_web` \| `owasp_llm` |
+| `lenses` | `cold_read,edge_case,acceptance,security,red_team` | Gate's expected set — must match the caller matrix |
 | `github_token` | — (required) | `${{ secrets.GITHUB_TOKEN }}`; needs `pull-requests: write` |
 | `api_key` | — | Provider key (required for `mode: lens`) |
 | `provider` | `openrouter` | pi provider backend |
@@ -106,9 +106,9 @@ merge is blocked until the MUST FIX findings are resolved.
 
 The example caller has a single `ENABLED` list (in its `config` job) that drives
 **both** the parallel review matrix **and** the gate — one source of truth.
-Comment a line to disable a lens; uncomment `owasp-web` / `owasp-llm` to enable
-them. Run only `blind,edge-case,acceptance` for correctness; add `security` /
-`red-team` for security; add `policy` for policy; add the OWASP lenses for OWASP
+Comment a line to disable a lens; uncomment `owasp_web` / `owasp_llm` to enable
+them. Run only `blind,edge_case,acceptance` for correctness; add `security` /
+`red_team` for security; add `policy` for policy; add the OWASP lenses for OWASP
 coverage. Every enabled lens runs as its own parallel job.
 
 ### Gate the lenses behind your cheap checks
@@ -223,7 +223,7 @@ Run the same lenses against your working tree before you push (Node, no shell):
 
 ```bash
 node scripts/run-local.mjs --base origin/main        # review your branch vs main
-node scripts/run-local.mjs --lens sentinel,red-team     # a subset
+node scripts/run-local.mjs --lens sentinel,red_team     # a subset
 ```
 
 Requires the `pi` CLI and a provider key in `OPENROUTER_API_KEY`. Findings are

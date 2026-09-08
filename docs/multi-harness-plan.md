@@ -40,9 +40,9 @@ The old branch pointer is untouched at `9e1be80` until you're happy with the rep
 
 ```
 .claude-plugin/plugin.json          .claude-plugin/marketplace.json
-skills/review/SKILL.md              agents/{acceptance,blind,compliance,edge-case,
-lenses/manifest.json                        owasp-llm,owasp-web,security,red-team}.md
-lenses/shared-review-contract.md    adapters/{README.md,codex/AGENTS.md,
+skills/review/SKILL.md              agents/{acceptance,blind,compliance,edge_case,
+lenses/manifest.json                        owasp_llm,owasp_web,security,red_team}.md
+lenses/shared_review_contract.md    adapters/{README.md,codex/AGENTS.md,
 lenses/README.md                             cursor/blind-peer-review.mdc}
 docs/market-analysis-and-roadmap.md
 ```
@@ -58,10 +58,10 @@ branch: node --test evals/contract.test.mjs  →  149 tests, 144 pass, 5 fail
 reading `lenses/*.md` and excluding exactly two names:
 
 ```js
-.filter((f) => f.endsWith(".md") && f !== "shared-instructions.md" && f !== "README.md")
+.filter((f) => f.endsWith(".md") && f !== "shared_instructions.md" && f !== "README.md")
 ```
 
-The branch adds a third non-lens file to that directory — `shared-review-contract.md` — so the
+The branch adds a third non-lens file to that directory — `shared_review_contract.md` — so the
 harness treats it as a ninth lens with no entry in `action.yml`'s `NAMES` table, and
 `norm(undefined)` throws. The test count rising 147 → 149 is the same fact: two of the checks are
 parameterised per shipped lens.
@@ -103,8 +103,8 @@ flip on phrasing. CI does not have this problem: it parses a JSON `severity` fie
 
 | Path | Contract | Transport |
 |---|---|---|
-| CI / pi | `lenses/shared-instructions.md` | `submit_findings` tool call, schema-validated by the provider |
-| Local (plugin/Codex/Cursor) | `lenses/shared-review-contract.md` | markdown `## <Lens Name>` section, free text |
+| CI / pi | `lenses/shared_instructions.md` | `submit_findings` tool call, schema-validated by the provider |
+| Local (plugin/Codex/Cursor) | `lenses/shared_review_contract.md` | markdown `## <Lens Name>` section, free text |
 
 `submit_findings` (PR #42) postdates the branch by three weeks. The neutral contract was written
 when both paths emitted markdown. The trust-boundary and severity halves of the two files agree;
@@ -123,7 +123,7 @@ undetected.
 
 ### 4.4 The personas are CI-coupled, and the adapters paper over it
 
-All 8 personas name `get_pr_diff` and carry `__PR_NUMBER__`; `shared-instructions.md` names
+All 8 personas name `get_pr_diff` and carry `__PR_NUMBER__`; `shared_instructions.md` names
 `submit_findings`. Every local adapter compensates with a variant of *"the persona may mention
 GitHub tools — ignore that CI wording; you are local."* Telling a reviewer to disregard part of
 its own instructions is a prompt-quality smell and it scales badly to a third and fourth harness.
@@ -182,7 +182,7 @@ Two ways to fix §2:
 **DONE.** Both candidate fixes were measured, and each reached 147/147 on its own, so both
 were applied:
 
-- `lenses/shared-review-contract.md` → `contracts/shared-review-contract.md` (13 references
+- `lenses/shared_review_contract.md` → `contracts/shared_review_contract.md` (13 references
   updated). `lenses/` is read as a registry, so a non-lens file in it gets enumerated as a lens.
 - `evals/lib/lenses.mjs::shippedLensKeys()` now reads `manifest.json` instead of listing the
   directory — 3 lines.
@@ -202,13 +202,13 @@ merge gates depend on that file. Only the second waits for W3.
    each harness states only its transport (`submit_findings` in CI, the final message locally).
 3. **DONE (found while doing the above) — `run-local.mjs` had no trust boundary at all.** The pi
    local path built its own inline markdown envelope and never loaded any shared contract, so a
-   local run had no injection defence. It now injects `contracts/shared-review-contract.md`, writes
+   local run had no injection defence. It now injects `contracts/shared_review_contract.md`, writes
    `.blind-peer-review/out/<key>.json`, and exits non-zero on a BLOCK.
 4. **Extend the eval harness to the local path (§4.3).** Reuse the existing fixtures against the
    local adjudicator. Minimum bar: a fixture whose lens output contains the literal words "no MUST
    FIX findings" must **PASS**, and that test must fail against today's SKILL.md.
 5. **Decouple personas from CI wording (§4.4).** Move `get_pr_diff` / `__PR_NUMBER__` / tool naming
-   out of the 8 personas into `shared-instructions.md` (CI) and the adapters (local); delete every
+   out of the 8 personas into `shared_instructions.md` (CI) and the adapters (local); delete every
    "ignore that CI wording" instruction.
 
 **Done when:** the same fixture set passes on both paths, no adapter tells a lens to disregard its

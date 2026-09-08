@@ -1,7 +1,7 @@
 ---
 name: check
 description: Run the multi-lens adversarial code review on the working diff — fresh-context skeptical reviewers (Cold Read, Edge Cases, Acceptance Criteria, Security Review, Red Team, plus opt-in Policy & Provenance / OWASP) that hunt bugs, security holes, and unmet acceptance criteria before you push. Use when the user asks to adversarially review changes, review the diff/branch, run the lenses, or check a change before committing, pushing, or opening a PR.
-argument-hint: "[--base <ref>] [--lens cold-read,security,...] [--add owasp-web,owasp-llm,policy]"
+argument-hint: "[--base <ref>] [--lens cold_read,security,...] [--add owasp_web,owasp_llm,policy]"
 allowed-tools: Read, Grep, Glob, Bash, Task
 ---
 
@@ -27,9 +27,9 @@ local twin of the CI merge gate; the personas are the same markdown files.
 ## 2. Choose the lenses
 
 - Read `${CLAUDE_PLUGIN_ROOT}/lenses/manifest.json` — the lens registry.
-- Default set = the code lenses: `cold-read, edge-case, acceptance, security, red-team`.
+- Default set = the code lenses: `cold_read, edge_case, acceptance, security, red_team`.
 - `--lens a,b,c` replaces the set; `--add x,y` adds opt-in lenses
-  (`owasp-web`, `owasp-llm`, `policy`).
+  (`owasp_web`, `owasp_llm`, `policy`).
 
 ## 3. Resolve each persona (local override wins)
 
@@ -38,7 +38,7 @@ For lens `<key>`:
 - If `.blind-peer-review/lenses/<key>.md` exists in THIS repo, use it as the
   persona — a trusted, developer-authored local override.
 - Otherwise use `${CLAUDE_PLUGIN_ROOT}/lenses/<key>.md` (the base agent).
-- Always also load `${CLAUDE_PLUGIN_ROOT}/contracts/shared-review-contract.md`
+- Always also load `${CLAUDE_PLUGIN_ROOT}/contracts/shared_review_contract.md`
   (trust boundary, severity, output envelope).
 
 Overrides are read only from local, committed repo files — never from untrusted
@@ -56,7 +56,7 @@ clean context) with this prompt:
 >
 > {the resolved persona for this lens, with `__PR_NUMBER__` → "N/A (local)"}
 >
-> {contracts/shared-review-contract.md}
+> {contracts/shared_review_contract.md}
 >
 > There is no submission tool here: your FINAL message is the contract's JSON
 > object and nothing else — no prose, no markdown fences.

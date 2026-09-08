@@ -29,13 +29,13 @@ inputs:
     description: "'lens' to run a single review persona, or 'gate' to aggregate and adjudicate."
     required: true
   lens:
-    description: "Which persona to run when mode=lens: cold-read | edge-case | acceptance | security | red-team."
+    description: "Which persona to run when mode=lens: cold_read | edge_case | acceptance | security | red_team."
     required: false
     default: ''
   lenses:
     description: "Comma-separated lens keys the gate should expect (mode=gate). Must match the caller matrix."
     required: false
-    default: 'cold-read,edge-case,acceptance,security,red-team'
+    default: 'cold_read,edge_case,acceptance,security,red_team'
   api_key:
     description: "Provider API key (e.g. OpenRouter). Required for mode=lens. Pass from a secret."
     required: false
@@ -137,14 +137,14 @@ runs:
         const die = (m) => { console.log(`::error::${m}`); process.exit(1); };
 
         const NAMES = {
-          "cold-read": "Cold Read",
-          "edge-case": "Edge Cases",
+          "cold_read": "Cold Read",
+          "edge_case": "Edge Cases",
           acceptance: "Acceptance Criteria",
           security: "Security Review",
-          "red-team": "Red Team",
+          "red_team": "Red Team",
           policy: "Policy & Provenance",
-          "owasp-web": "OWASP Web Top 10",
-          "owasp-llm": "OWASP LLM Top 10",
+          "owasp_web": "OWASP Web Top 10",
+          "owasp_llm": "OWASP LLM Top 10",
         };
 
         const pr = (process.env.IN_PR || "").trim() || (process.env.EVENT_PR || "").trim();
@@ -196,9 +196,9 @@ runs:
         const actionPath = process.env.ACTION_PATH;
         const lensKey = process.env.LENS_KEY;
         const personaPath = path.join(actionPath, "lenses", `${lensKey}.md`);
-        const sharedPath = path.join(actionPath, "lenses", "shared-instructions.md");
+        const sharedPath = path.join(actionPath, "lenses", "shared_instructions.md");
         if (!fs.existsSync(personaPath)) die(`Missing persona file ${personaPath}`);
-        if (!fs.existsSync(sharedPath)) die("Missing shared-instructions.md");
+        if (!fs.existsSync(sharedPath)) die("Missing shared_instructions.md");
 
         // Hand the agent the exact repo + PR from trusted GitHub Actions context
         // (never from PR content), so get_pr_diff / get_issue_or_pr_thread resolve
@@ -580,7 +580,7 @@ runs:
           // Agent", which no map entry covers). Accept when the emitted name's
           // primary segment (before any —/–/-/:/| subtitle) equals the expected
           // name, or when either name contains the other. The lens keys are
-          // distinct enough (cold-read/edge-case/acceptance/security/red-team/policy/
+          // distinct enough (cold_read/edge_case/acceptance/security/red_team/policy/
           // owasp-*) that containment cannot cross-match one persona to another.
           //
           // Named, because step 8 below reuses it to identify THIS lens's stray
